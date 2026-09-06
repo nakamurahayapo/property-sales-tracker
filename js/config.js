@@ -16,8 +16,8 @@ const FIREBASE_CONFIG = {
   appId:             "1:860324051540:web:9c9ec839c05f0bb83b4bc1"
 };
 
-// ===== 決済日アラートの閾値（日数） =====
-// 決済日までの残り日数がこの値以下ならゴールド表示（0=当日、マイナス=期限超過は別扱い）
+// ===== 仕入決済予定日アラートの閾値（日数） =====
+// 仕入決済予定日までの残り日数がこの値以下ならゴールド表示（0=当日、マイナス=期限超過は別扱い）
 const SETTLEMENT_ALERT_DAYS = 7;
 
 // ===== ブランドカラー（いえプロ不動産） =====
@@ -65,7 +65,7 @@ function formatDateJP(dateStr) {
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}(${days[date.getDay()]})`;
 }
 
-// 決済日の残り日数からアラートレベルを判定する
+// 仕入決済予定日の残り日数からアラートレベルを判定する
 // level: 'overdue'（過去）/ 'warning'（残りSETTLEMENT_ALERT_DAYS日以内）/ 'normal'
 function getSettlementAlert(settlementDate) {
   const target = parseDateOnly(settlementDate);
@@ -78,8 +78,8 @@ function getSettlementAlert(settlementDate) {
 }
 
 // ===== 値下げ検討アラート =====
-// 決済予定日を過ぎてもなお登録されたまま（＝未成約）の物件について、
-// 決済予定日から1ヶ月半（1ヶ月＋15日）経過したら「値下げ検討」を促す
+// 仕入決済予定日を過ぎてもなお登録されたまま（＝未成約）の物件について、
+// 仕入決済予定日から1ヶ月半（1ヶ月＋15日）経過したら「値下げ検討」を促す
 const PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT = 1;
 const PRICE_REVIEW_DAYS_AFTER_SETTLEMENT = 15;
 
