@@ -83,10 +83,16 @@ function getSettlementAlert(settlementDate) {
 const PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT = 1;
 const PRICE_REVIEW_DAYS_AFTER_SETTLEMENT = 15;
 
-function isPriceReviewDue(settlementDate) {
+// 値下げ検討予定日（仕入決済予定日から1ヶ月半後）をDateで返す。仕入決済予定日未設定ならnull
+function getPriceReviewDate(settlementDate) {
   const target = parseDateOnly(settlementDate);
-  if (!target) return false;
-  const threshold = new Date(target.getFullYear(), target.getMonth() + PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT, target.getDate() + PRICE_REVIEW_DAYS_AFTER_SETTLEMENT);
+  if (!target) return null;
+  return new Date(target.getFullYear(), target.getMonth() + PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT, target.getDate() + PRICE_REVIEW_DAYS_AFTER_SETTLEMENT);
+}
+
+function isPriceReviewDue(settlementDate) {
+  const threshold = getPriceReviewDate(settlementDate);
+  if (!threshold) return false;
   const today = parseDateOnly(getTodayString());
   return today >= threshold;
 }

@@ -400,7 +400,7 @@ function openHistoryModal(id) {
     }).join('');
   }
 
-  renderHistoryChart(rows);
+  renderHistoryChart(rows, p.settlementDate);
   document.getElementById('history-modal-overlay').hidden = false;
 }
 
@@ -410,7 +410,9 @@ function closeHistoryModal() {
 }
 
 // 価格推移の折れ線グラフ（外部ライブラリなし・SVG自前描画）
-function renderHistoryChart(rows) {
+// settlementDate（仕入決済予定日）が設定されていれば、その1ヶ月半後＝値下げ検討予定日を
+// 縦の点線で重ねて表示する。x軸は日付の実際の間隔に比例させ、予定日の位置も正しく反映する
+function renderHistoryChart(rows, settlementDate) {
   const wrap = document.getElementById('history-chart-wrap');
   if (!rows.length) {
     wrap.innerHTML = '';
@@ -418,9 +420,21 @@ function renderHistoryChart(rows) {
   }
 
   const width = 560, height = 220;
-  const padLeft = 56, padRight = 20, padTop = 16, padBottom = 34;
+  const padLeft = 56, padRight = 20, padTop = 34, padBottom = 34;
   const innerW = width - padLeft - padRight;
   const innerH = height - padTop - padBottom;
+
+  const reviewDate = getPriceReviewDate(settlementDate);
+  const historyDates = rows.map(function (r) { return parseDateOnly(r.date); });
+  const allTimes = (reviewDate ? historyDates.concat([reviewDate]) : historyDates).map(function (d) { return d.getTime(); });
+  const minTime = Math.min.apply(null, allTimes);
+  const maxTime = Math.max.apply(null, allTimes);
+  const timeSpan = maxTime - minTime;
+
+  function xForTime(t) {
+    if (timeSpan === 0) return padLeft + innerW / 2;
+    return padLeft + ((t - minTime) / timeSpan) * innerW;
+  }
 
   const prices = rows.map(function (r) { return r.price; });
   const minP = Math.min.apply(null, prices);
@@ -430,10 +444,12 @@ function renderHistoryChart(rows) {
   const paddedMax = maxP + range * 0.15;
   const paddedRange = (paddedMax - paddedMin) || 1;
 
+  function yForPrice(price) {
+    return padTop + innerH - ((price - paddedMin) / paddedRange) * innerH;
+  }
+
   const points = rows.map(function (r, i) {
-    const x = padLeft + (rows.length === 1 ? innerW / 2 : (i / (rows.length - 1)) * innerW);
-    const y = padTop + innerH - ((r.price - paddedMin) / paddedRange) * innerH;
-    return { x: x, y: y, row: r };
+    return { x: xForTime(historyDates[i].getTime()), y: yForPrice(r.price), row: r };
   });
 
   const polyline = points.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
@@ -457,8 +473,21 @@ function renderHistoryChart(rows) {
     }
   });
 
+  // 値下げ検討予定日（仕入決済予定日+1ヶ月半）の縦線マーカー
+  let reviewMarker = '';
+  if (reviewDate) {
+    const rx = xForTime(reviewDate.getTime());
+    const labelOnRight = rx < width / 2;
+    const anchor = labelOnRight ? 'start' : 'end';
+    const labelX = labelOnRight ? rx + 6 : rx - 6;
+    reviewMarker = `
+      <line x1="${rx.toFixed(1)}" y1="14" x2="${rx.toFixed(1)}" y2="${height - padBottom}" stroke="${BRAND_COLORS.danger}" stroke-width="1.5" stroke-dasharray="4,3"></line>
+      <text x="${labelX.toFixed(1)}" y="11" text-anchor="${anchor}" font-size="11" font-weight="700" fill="${BRAND_COLORS.danger}">値下げ検討予定 ${escapeHtml(formatDateShortFromDate(reviewDate))}</text>`;
+  }
+
   wrap.innerHTML = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="xMinYMin meet">
     ${gridLines}
+    ${reviewMarker}
     <polyline points="${polyline}" fill="none" stroke="${BRAND_COLORS.navy}" stroke-width="2"></polyline>
     ${dots}
     ${xLabels}
@@ -475,6 +504,10 @@ function truncateLabel(str, maxLen) {
 function formatDateShort(dateStr) {
   const date = parseDateOnly(dateStr);
   if (!date) return '';
+  return formatDateShortFromDate(date);
+}
+
+function formatDateShortFromDate(date) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
