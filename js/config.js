@@ -8,12 +8,12 @@
 // 2. 「プロジェクトの設定」→「マイアプリ」でWebアプリを追加
 // 3. 表示されるconfigオブジェクトの値を以下にコピーしてください
 const FIREBASE_CONFIG = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT.firebaseapp.com",
-  projectId:         "YOUR_PROJECT",
-  storageBucket:     "YOUR_PROJECT.firebasestorage.app",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID"
+  apiKey:            "AIzaSyAGuif4BFu5YbwHLzeUYK7A4DZVpo_5CLE",
+  authDomain:        "kaitorisukezyu-ru.firebaseapp.com",
+  projectId:         "kaitorisukezyu-ru",
+  storageBucket:     "kaitorisukezyu-ru.firebasestorage.app",
+  messagingSenderId: "860324051540",
+  appId:             "1:860324051540:web:9c9ec839c05f0bb83b4bc1"
 };
 
 // ===== 決済日アラートの閾値（日数） =====
