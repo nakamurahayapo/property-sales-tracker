@@ -199,6 +199,8 @@ body {
 }
 .tag-overdue { background: var(--danger); color: white; }
 .tag-warning { background: var(--accent); color: white; }
+.tag-price-review { background: white; color: var(--danger); border: 1.5px solid var(--danger); }
+.tag-group { display: flex; flex-wrap: wrap; gap: 4px; }
 
 .row-actions { display: flex; gap: 6px; }
 

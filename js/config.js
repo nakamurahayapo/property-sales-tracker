@@ -77,6 +77,20 @@ function getSettlementAlert(settlementDate) {
   return { level: 'normal', label: '', diffDays };
 }
 
+// ===== 値下げ検討アラート =====
+// 決済予定日を過ぎてもなお登録されたまま（＝未成約）の物件について、
+// 決済予定日から1ヶ月半（1ヶ月＋15日）経過したら「値下げ検討」を促す
+const PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT = 1;
+const PRICE_REVIEW_DAYS_AFTER_SETTLEMENT = 15;
+
+function isPriceReviewDue(settlementDate) {
+  const target = parseDateOnly(settlementDate);
+  if (!target) return false;
+  const threshold = new Date(target.getFullYear(), target.getMonth() + PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT, target.getDate() + PRICE_REVIEW_DAYS_AFTER_SETTLEMENT);
+  const today = parseDateOnly(getTodayString());
+  return today >= threshold;
+}
+
 // ===== 金額表示 =====
 
 function formatMan(value) {

@@ -182,11 +182,14 @@ function renderTable(list) {
   tbody.innerHTML = list.map(function (p) {
     const alert = getSettlementAlert(p.settlementDate);
     const rowClass = alert.level === 'overdue' ? 'row-overdue' : alert.level === 'warning' ? 'row-warning' : '';
-    const tag = alert.level === 'overdue'
+    let tags = alert.level === 'overdue'
       ? `<span class="tag tag-overdue">${alert.label}</span>`
       : alert.level === 'warning'
         ? `<span class="tag tag-warning">${alert.label}</span>`
         : '';
+    if (isPriceReviewDue(p.settlementDate)) {
+      tags += `<span class="tag tag-price-review">値下げ検討</span>`;
+    }
     return `<tr class="${rowClass}">
       <td class="property-name-cell">${escapeHtml(p.name || '')}</td>
       <td>${escapeHtml(p.staff || '')}</td>
@@ -195,7 +198,7 @@ function renderTable(list) {
       <td>${formatMan(p.grossProfit)}</td>
       <td>${p.settlementDate ? formatDateJP(p.settlementDate) : '未設定'}</td>
       <td>${p.priceChangeDate ? formatDateJP(p.priceChangeDate) : '－'}</td>
-      <td>${tag}</td>
+      <td><div class="tag-group">${tags}</div></td>
       <td>
         <div class="row-actions">
           <button class="btn btn-secondary btn-sm" onclick="openHistoryModal('${p.id}')">履歴</button>
