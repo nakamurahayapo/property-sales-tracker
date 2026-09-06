@@ -10,8 +10,6 @@ let searchText = '';       // 物件名検索
 let sortKey = 'settlementDate';
 let sortDir = 'asc';
 
-let grossProfitChart = null;
-let historyChart = null;
 let editingId = null;      // 編集中の物件id（null＝新規登録）
 let historyPropertyId = null;
 
@@ -221,60 +219,46 @@ function updateSortArrows() {
   });
 }
 
-// ===== 粗利比較グラフ（横棒） =====
+// ===== 粗利比較グラフ（横棒・SVG自前描画） =====
+// 外部グラフライブラリは使わず、社内ネットワークでも確実に表示できるようSVGで直接描画する
 
 function renderGrossProfitChart(list) {
-  const canvas = document.getElementById('gross-profit-chart');
+  const wrap = document.getElementById('gross-profit-chart-wrap');
   const empty = document.getElementById('gross-profit-chart-empty');
   if (!list.length) {
-    canvas.style.display = 'none';
+    wrap.innerHTML = '';
     empty.style.display = 'block';
-    if (grossProfitChart) { grossProfitChart.destroy(); grossProfitChart = null; }
     return;
   }
-  canvas.style.display = 'block';
   empty.style.display = 'none';
 
   const sorted = list.slice().sort(function (a, b) { return (Number(b.grossProfit) || 0) - (Number(a.grossProfit) || 0); });
-  const labels = sorted.map(function (p) { return p.name; });
-  const data = sorted.map(function (p) { return Number(p.grossProfit) || 0; });
 
-  const ctx = canvas.getContext('2d');
-  if (grossProfitChart) grossProfitChart.destroy();
+  const rowHeight = 30;
+  const barHeight = 16;
+  const labelWidth = 150;
+  const barAreaWidth = 380;
+  const valueColWidth = 90;
+  const totalWidth = labelWidth + barAreaWidth + valueColWidth;
+  const topPad = 8;
+  const height = sorted.length * rowHeight + topPad * 2;
+  const maxValue = Math.max(1, ...sorted.map(function (p) { return Math.max(0, Number(p.grossProfit) || 0); }));
 
-  const height = Math.max(160, sorted.length * 32);
-  canvas.parentElement.style.height = height + 'px';
-
-  grossProfitChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: '粗利（万円）',
-        data: data,
-        backgroundColor: BRAND_COLORS.gold,
-        borderRadius: 4,
-        maxBarThickness: 22,
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function (item) { return formatMan(item.parsed.x); }
-          }
-        }
-      },
-      scales: {
-        x: { ticks: { color: BRAND_COLORS.navySub }, grid: { color: '#E7ECEF' } },
-        y: { ticks: { color: BRAND_COLORS.navy }, grid: { display: false } },
-      }
-    }
+  let bars = '';
+  sorted.forEach(function (p, i) {
+    const value = Number(p.grossProfit) || 0;
+    const isNeg = value < 0;
+    const rowY = topPad + i * rowHeight;
+    const barY = rowY + (rowHeight - barHeight) / 2;
+    const w = Math.max(0, value) / maxValue * barAreaWidth;
+    const textY = rowY + rowHeight / 2 + 4;
+    bars += `
+      <text x="${labelWidth - 8}" y="${textY}" text-anchor="end" font-size="12" fill="${BRAND_COLORS.navy}">${escapeHtml(truncateLabel(p.name, 16))}</text>
+      <rect x="${labelWidth}" y="${barY}" width="${w}" height="${barHeight}" rx="3" fill="${isNeg ? BRAND_COLORS.danger : BRAND_COLORS.gold}"></rect>
+      <text x="${labelWidth + barAreaWidth + 8}" y="${textY}" font-size="12" fill="${isNeg ? BRAND_COLORS.danger : BRAND_COLORS.navySub}">${formatMan(value)}</text>`;
   });
+
+  wrap.innerHTML = `<svg viewBox="0 0 ${totalWidth} ${height}" width="100%" height="${height}" preserveAspectRatio="xMinYMin meet">${bars}</svg>`;
 }
 
 // ===== 登録・編集モーダル =====
@@ -422,53 +406,74 @@ function closeHistoryModal() {
   historyPropertyId = null;
 }
 
+// 価格推移の折れ線グラフ（外部ライブラリなし・SVG自前描画）
 function renderHistoryChart(rows) {
-  const canvas = document.getElementById('history-chart');
-  const ctx = canvas.getContext('2d');
-  if (historyChart) historyChart.destroy();
-
+  const wrap = document.getElementById('history-chart-wrap');
   if (!rows.length) {
-    canvas.style.display = 'none';
+    wrap.innerHTML = '';
     return;
   }
-  canvas.style.display = 'block';
 
-  historyChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: rows.map(function (r) { return formatDateJP(r.date); }),
-      datasets: [{
-        label: '価格（万円）',
-        data: rows.map(function (r) { return r.price; }),
-        borderColor: BRAND_COLORS.navy,
-        backgroundColor: BRAND_COLORS.navy,
-        pointBackgroundColor: BRAND_COLORS.gold,
-        pointBorderColor: BRAND_COLORS.gold,
-        pointRadius: 4,
-        tension: 0.15,
-        fill: false,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function (item) { return formatMan(item.parsed.y); }
-          }
-        }
-      },
-      scales: {
-        x: { ticks: { color: BRAND_COLORS.navySub }, grid: { display: false } },
-        y: { ticks: { color: BRAND_COLORS.navySub }, grid: { color: '#E7ECEF' } },
-      }
+  const width = 560, height = 220;
+  const padLeft = 56, padRight = 20, padTop = 16, padBottom = 34;
+  const innerW = width - padLeft - padRight;
+  const innerH = height - padTop - padBottom;
+
+  const prices = rows.map(function (r) { return r.price; });
+  const minP = Math.min.apply(null, prices);
+  const maxP = Math.max.apply(null, prices);
+  const range = (maxP - minP) || Math.max(1, Math.abs(maxP)) || 1;
+  const paddedMin = minP - range * 0.15;
+  const paddedMax = maxP + range * 0.15;
+  const paddedRange = (paddedMax - paddedMin) || 1;
+
+  const points = rows.map(function (r, i) {
+    const x = padLeft + (rows.length === 1 ? innerW / 2 : (i / (rows.length - 1)) * innerW);
+    const y = padTop + innerH - ((r.price - paddedMin) / paddedRange) * innerH;
+    return { x: x, y: y, row: r };
+  });
+
+  const polyline = points.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+
+  // Y軸の目盛り（最小・中央・最大の3本）
+  let gridLines = '';
+  [0, 0.5, 1].forEach(function (t) {
+    const y = padTop + innerH * (1 - t);
+    const val = paddedMin + paddedRange * t;
+    gridLines += `<line x1="${padLeft}" y1="${y}" x2="${width - padRight}" y2="${y}" stroke="#E7ECEF" stroke-width="1"></line>
+      <text x="${padLeft - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="${BRAND_COLORS.navySub}">${Math.round(val).toLocaleString('ja-JP')}</text>`;
+  });
+
+  // X軸の日付ラベル（点が多いときは間引く）
+  const labelStep = Math.max(1, Math.ceil(points.length / 6));
+  let dots = '', xLabels = '';
+  points.forEach(function (p, i) {
+    dots += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="${BRAND_COLORS.gold}" stroke="${BRAND_COLORS.navy}" stroke-width="1.5"></circle>`;
+    if (i === 0 || i === points.length - 1 || i % labelStep === 0) {
+      xLabels += `<text x="${p.x.toFixed(1)}" y="${height - padBottom + 16}" text-anchor="middle" font-size="10" fill="${BRAND_COLORS.navySub}">${escapeHtml(formatDateShort(p.row.date))}</text>`;
     }
   });
+
+  wrap.innerHTML = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="xMinYMin meet">
+    ${gridLines}
+    <polyline points="${polyline}" fill="none" stroke="${BRAND_COLORS.navy}" stroke-width="2"></polyline>
+    ${dots}
+    ${xLabels}
+  </svg>`;
 }
 
 // ===== ユーティリティ =====
+
+function truncateLabel(str, maxLen) {
+  const s = String(str || '');
+  return s.length > maxLen ? s.slice(0, maxLen - 1) + '…' : s;
+}
+
+function formatDateShort(dateStr) {
+  const date = parseDateOnly(dateStr);
+  if (!date) return '';
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
 
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, function (c) {

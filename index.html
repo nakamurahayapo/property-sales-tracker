@@ -53,8 +53,8 @@
     <div class="card">
       <div class="card-header">物件別 粗利比較</div>
       <div class="card-body">
-        <div class="chart-wrap" style="height:220px">
-          <canvas id="gross-profit-chart"></canvas>
+        <div class="chart-wrap">
+          <div id="gross-profit-chart-wrap"></div>
           <div class="empty-state" id="gross-profit-chart-empty" style="display:none">
             <div class="empty-icon">📊</div>表示できるデータがありません
           </div>
@@ -144,8 +144,8 @@
         <button class="modal-close" id="history-modal-close">×</button>
       </div>
       <div class="modal-body">
-        <div class="chart-wrap" style="height:220px">
-          <canvas id="history-chart"></canvas>
+        <div class="chart-wrap">
+          <div id="history-chart-wrap"></div>
         </div>
         <table class="history-table">
           <thead>
@@ -163,8 +163,6 @@
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-  <!-- Chart.js（履歴グラフ・粗利比較グラフ） -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 
   <script src="js/config.js"></script>
   <script src="js/main.js"></script>
