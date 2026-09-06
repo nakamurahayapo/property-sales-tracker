@@ -1,0 +1,124 @@
+# 買取再販 物件販売管理アプリ
+
+買取再販事業で買い取った物件の販売計画・価格推移をチームで共有管理するWebアプリです。
+仕様の詳細は [`property-sales-tracker-spec.md`](./property-sales-tracker-spec.md) を参照してください。
+
+## セットアップ手順
+
+### 1. Firebase プロジェクトを作成する
+
+1. [Firebase Console](https://console.firebase.google.com) にアクセス（Googleアカウントでログイン）
+2. 「プロジェクトを追加」をクリック
+3. プロジェクト名を入力（例: `kaitorischedule`）してプロジェクトを作成
+4. 左メニューから「Firestore Database」→「データベースの作成」
+   - 「本番環境モード」を選択して作成（あとでルールを変更します）
+   - リージョンは「asia-northeast1（東京）」を推奨
+
+### 2. アプリのFirebase設定を取得する
+
+1. Firebase Consoleの歯車アイコン→「プロジェクトの設定」
+2. 「マイアプリ」タブ→「</>」（Web）をクリック
+3. アプリ名（例: `kaitorischedule-web`）を入力して登録
+4. 表示される `firebaseConfig` オブジェクトの中身をコピー
+
+### 3. `js/config.js` を書き換える
+
+`js/config.js` の上部にある `FIREBASE_CONFIG` に、コピーした値を貼り付けます：
+
+```javascript
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSy...",
+  authDomain:        "your-project.firebaseapp.com",
+  projectId:         "your-project",
+  storageBucket:     "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId:             "1:123...:web:abc..."
+};
+```
+
+### 4. Firestore セキュリティルールを設定する
+
+Firebase Console → Firestore → 「ルール」タブで以下に書き換えて「公開」：
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /properties/{document} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+> ※ このルールはチーム内ツールの想定で、誰でも読み書きできます（現時点ではログイン認証なしの社内アクセス限定運用を想定）。
+> 外部公開する場合や認証を追加する場合はルールを強化してください。
+
+### 5. ローカルで動作確認する
+
+```bash
+# Python がある場合
+python -m http.server 8000
+
+# Node.js がある場合
+npx serve .
+```
+
+ブラウザで `http://localhost:8000` を開いて動作確認してください。
+
+### 6. Vercel にデプロイする（無料）
+
+1. [Vercel](https://vercel.com) にサインアップ（GitHubアカウント推奨）
+2. このフォルダを GitHub にプッシュ
+3. Vercel で「New Project」→ GitHubリポジトリを選択
+4. そのままデプロイ（設定不要・ビルドコマンド・出力ディレクトリの指定は不要な静的サイトです）
+5. 発行されたURLをチームに共有
+
+---
+
+## ファイル構成
+
+```
+kaitorischedule/
+├── index.html          # 物件一覧・登録・編集・履歴表示（すべてこの1画面）
+├── css/
+│   └── style.css        # スタイル（いえプロ不動産ブランドカラー準拠）
+├── js/
+│   ├── config.js         # ★設定ファイル（Firebase設定・日付/金額ユーティリティ）
+│   └── main.js           # 一覧描画・CRUD・フィルタ・ソート・グラフ描画ロジック
+└── property-sales-tracker-spec.md  # 元の仕様書
+```
+
+## 機能一覧
+
+- **一覧・CRUD**：物件の登録／編集／削除（「＋ 新規登録」ボタン、各行の「編集」「削除」）
+- **価格変更履歴の自動記録**：編集画面で現在価格を前回と異なる値に変更して保存すると、その時点の日付と価格が自動で履歴（`history`）に追加されます。手動で履歴を入力する欄はありません
+- **履歴表示**：各行の「履歴」ボタンから、価格推移の折れ線グラフと変更履歴の表（日付／価格／増減）を表示
+- **決済日アラート**：
+  - 決済日が今日より過去 → 行を赤色表示＋「期限超過」タグ
+  - 決済日まで7日以内 → 行をゴールド表示＋「残り○日」タグ
+  - 閾値は `js/config.js` の `SETTLEMENT_ALERT_DAYS` で変更できます
+- **一覧グラフ**：物件別の粗利比較を横棒グラフで表示（フィルタ・検索結果と連動）
+- **フィルタ・検索**：担当名で絞り込み、物件名で部分一致検索
+- **ソート**：テーブルヘッダーをクリックして物件名／担当／各価格／決済日／価格変更日で並び替え（再クリックで昇順・降順切り替え）
+- **サマリー表示**：物件数、合計粗利、決済まで7日以内の件数に加えて、担当者別の合計粗利も表示
+
+## データモデル（Firestore コレクション：`properties`）
+
+| フィールド名 | 型 | 内容 |
+|---|---|---|
+| name | string | 物件名（必須） |
+| staff | string | 担当名 |
+| startPrice | number | 販売開始価格（万円） |
+| currentPrice | number | 現在価格（万円） |
+| grossProfit | number | 粗利（万円） |
+| settlementDate | date (string) | 決済日（`YYYY-MM-DD`） |
+| priceChangeDate | date (string) | 価格変更日（直近の変更日） |
+| history | array | 価格変更履歴。要素は `{ date, price }` |
+| updatedAt | timestamp | 更新日時 |
+
+## 今回のスコープ外（仕様書の「未確定・要相談事項」への回答）
+
+- **ログイン方式**：認証なし・社内アクセスのみで実装（Google認証は未実装）
+- **担当者ごとの合計粗利サマリー**：実装済み（一覧画面の「担当者別 合計粗利」）
+- **値下げが必要そうな物件を上位に出す並び替えロジック**：未実装（必要になった場合は判定基準を決めた上で追加してください）

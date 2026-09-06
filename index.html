@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>買取再販 物件販売管理</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <h1>🏠 買取再販 物件販売管理</h1>
+  </header>
+
+  <div class="main-content">
+
+    <!-- サマリー -->
+    <div class="summary-grid">
+      <div class="stat-tile">
+        <div class="stat-tile-label">物件数</div>
+        <div class="stat-tile-value"><span id="stat-count">0</span><span class="stat-tile-unit">件</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">合計粗利</div>
+        <div class="stat-tile-value accent"><span id="stat-gross-profit">0</span><span class="stat-tile-unit">万円</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">決済まで7日以内</div>
+        <div class="stat-tile-value danger"><span id="stat-due-soon">0</span><span class="stat-tile-unit">件</span></div>
+      </div>
+    </div>
+
+    <!-- 担当者別サマリー -->
+    <div class="card">
+      <div class="card-header">担当者別 合計粗利</div>
+      <div class="card-body">
+        <div class="staff-summary-list" id="staff-summary-list"></div>
+      </div>
+    </div>
+
+    <!-- ツールバー：フィルタ・検索・新規登録 -->
+    <div class="toolbar">
+      <div class="toolbar-group">
+        <select id="filter-staff">
+          <option value="">担当：すべて</option>
+        </select>
+        <input type="text" id="search-name" placeholder="物件名で検索">
+      </div>
+      <button class="btn btn-accent" id="add-property-btn">＋ 新規登録</button>
+    </div>
+
+    <!-- 粗利比較グラフ -->
+    <div class="card">
+      <div class="card-header">物件別 粗利比較</div>
+      <div class="card-body">
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="gross-profit-chart"></canvas>
+          <div class="empty-state" id="gross-profit-chart-empty" style="display:none">
+            <div class="empty-icon">📊</div>表示できるデータがありません
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 物件一覧テーブル -->
+    <div class="card">
+      <div class="card-header">物件一覧</div>
+      <div class="table-scroll">
+        <table class="property-table" id="property-table">
+          <thead>
+            <tr>
+              <th data-sort-key="name" data-label="物件名">物件名</th>
+              <th data-sort-key="staff" data-label="担当">担当</th>
+              <th data-sort-key="startPrice" data-label="販売開始価格">販売開始価格</th>
+              <th data-sort-key="currentPrice" data-label="現在価格">現在価格</th>
+              <th data-sort-key="grossProfit" data-label="粗利">粗利</th>
+              <th data-sort-key="settlementDate" data-label="決済日">決済日</th>
+              <th data-sort-key="priceChangeDate" data-label="価格変更日">価格変更日</th>
+              <th class="no-sort">状態</th>
+              <th class="no-sort">操作</th>
+            </tr>
+          </thead>
+          <tbody id="property-list-body">
+            <tr><td colspan="9"><div class="loading"><div class="loading-spinner"></div>読み込み中...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 登録・編集モーダル -->
+  <div class="modal-overlay" id="property-modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="property-modal-title">物件を新規登録</h2>
+        <button class="modal-close" id="property-modal-close">×</button>
+      </div>
+      <form id="property-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">物件名 <span style="color:var(--danger)">*必須</span></label>
+            <input type="text" id="field-name" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">担当名</label>
+            <input type="text" id="field-staff">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">販売開始価格（万円）</label>
+              <input type="number" id="field-startPrice" step="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">現在価格（万円）</label>
+              <input type="number" id="field-currentPrice" step="1">
+              <div class="form-hint">保存時に前回と値が変われば価格変更履歴に自動追加されます</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">粗利（万円）</label>
+              <input type="number" id="field-grossProfit" step="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">決済日</label>
+              <input type="date" id="field-settlementDate">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="property-modal-cancel">キャンセル</button>
+          <button type="submit" class="btn btn-accent" id="property-modal-submit">保存する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 履歴モーダル -->
+  <div class="modal-overlay" id="history-modal-overlay" hidden>
+    <div class="modal" style="max-width:640px">
+      <div class="modal-header">
+        <h2 id="history-modal-title">価格推移</h2>
+        <button class="modal-close" id="history-modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="history-chart"></canvas>
+        </div>
+        <table class="history-table">
+          <thead>
+            <tr><th>日付</th><th>価格</th><th>増減</th></tr>
+          </thead>
+          <tbody id="history-table-body"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="history-modal-ok">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <!-- Chart.js（履歴グラフ・粗利比較グラフ） -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+
+  <script src="js/config.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
