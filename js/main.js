@@ -9,6 +9,7 @@ let properties = [];       // Firestoreから取得した物件一覧（各要�
 let propertiesById = {};   // id -> 物件データ（編集時の差分判定に使用）
 
 let filterStaff = '';      // 担当名フィルタ（空文字＝すべて）
+let filterStatus = 'active'; // 状態フィルタ：'active'（販売中のみ・既定）／'sold'（成約済みのみ）／'all'（すべて）
 let searchText = '';       // 物件名・区画名検索
 let sortKey = 'settlementDate';
 let sortDir = 'asc';
@@ -37,7 +38,7 @@ function generateId() {
 function normalizeProperty(data) {
   if (Array.isArray(data.lots) && data.lots.length) {
     data.lots = data.lots.map(function (lot) {
-      return Object.assign({ id: lot.id || generateId(), lotName: lot.lotName || '', history: lot.history || [] }, lot);
+      return Object.assign({ id: lot.id || generateId(), lotName: lot.lotName || '', history: lot.history || [], status: 'active' }, lot);
     });
     return data;
   }
@@ -52,6 +53,7 @@ function normalizeProperty(data) {
     salesStartDate: data.salesStartDate || null,
     priceChangeDate: data.priceChangeDate || null,
     history: data.history || [],
+    status: 'active',
   }];
   return data;
 }
@@ -101,6 +103,10 @@ function bindToolbar() {
     filterStaff = e.target.value;
     render();
   });
+  document.getElementById('filter-status').addEventListener('change', function (e) {
+    filterStatus = e.target.value;
+    render();
+  });
   document.getElementById('search-name').addEventListener('input', function (e) {
     searchText = e.target.value.trim();
     render();
@@ -129,6 +135,7 @@ function getFilteredRows(rows) {
   const needle = searchText.toLowerCase();
   return rows.filter(function (r) {
     if (filterStaff && r.staff !== filterStaff) return false;
+    if (filterStatus !== 'all' && (r.status || 'active') !== filterStatus) return false;
     if (needle) {
       const haystack = ((r.propertyName || '') + ' ' + (r.lotName || '')).toLowerCase();
       if (!haystack.includes(needle)) return false;
@@ -251,20 +258,52 @@ function renderTable(list) {
     return;
   }
 
-  tbody.innerHTML = list.map(function (r) {
-    const alert = getSettlementAlert(r.settlementDate);
-    const rowClass = alert.level === 'overdue' ? 'row-overdue' : alert.level === 'warning' ? 'row-warning' : '';
-    let tags = alert.level === 'overdue'
-      ? `<span class="tag tag-overdue">${alert.label}</span>`
-      : alert.level === 'warning'
-        ? `<span class="tag tag-warning">${alert.label}</span>`
-        : '';
-    const reviewStage = getPriceReviewStageDue(r.settlementDate);
-    if (reviewStage) {
-      const stageLabel = PRICE_REVIEW_STAGE_LABELS[reviewStage - 1] || `${reviewStage}回目`;
-      tags += `<span class="tag tag-price-review">値下げ検討${stageLabel}</span>`;
+  // 物件名でソートしているときだけ、同じ物件の区画が並びで隣接するので、
+  // 物件ごとの小計行（表示中の区画数・成約内訳・合計粗利）を挟んで見やすくする
+  if (sortKey === 'name') {
+    let html = '';
+    let i = 0;
+    while (i < list.length) {
+      const pid = list[i].propertyId;
+      const group = [];
+      while (i < list.length && list[i].propertyId === pid) { group.push(list[i]); i++; }
+      if (group.length > 1) html += renderPropertyGroupRow(group);
+      html += group.map(renderLotRow).join('');
     }
-    return `<tr class="${rowClass}">
+    tbody.innerHTML = html;
+  } else {
+    tbody.innerHTML = list.map(renderLotRow).join('');
+  }
+}
+
+// 物件ごとの小計行（同じ物件名でまとまっている区画が2件以上のときだけ表示）
+function renderPropertyGroupRow(group) {
+  const soldCount = group.filter(function (r) { return r.status === 'sold'; }).length;
+  const totalGrossProfit = group.reduce(function (sum, r) { return sum + (Number(r.grossProfit) || 0); }, 0);
+  return `<tr class="property-group-row">
+    <td colspan="11">
+      <span class="property-group-name">${escapeHtml(group[0].propertyName)}</span>
+      <span class="property-group-meta">表示中${group.length}区画（成約済み${soldCount}／販売中${group.length - soldCount}）・表示区画合計粗利 ${formatMan(totalGrossProfit)}</span>
+    </td>
+  </tr>`;
+}
+
+function renderLotRow(r) {
+  const isSold = r.status === 'sold';
+  const alert = isSold ? { level: 'normal', label: '' } : getSettlementAlert(r.settlementDate);
+  const rowClass = isSold ? 'row-sold' : alert.level === 'overdue' ? 'row-overdue' : alert.level === 'warning' ? 'row-warning' : '';
+  let tags = alert.level === 'overdue'
+    ? `<span class="tag tag-overdue">${alert.label}</span>`
+    : alert.level === 'warning'
+      ? `<span class="tag tag-warning">${alert.label}</span>`
+      : '';
+  const reviewStage = isSold ? null : getPriceReviewStageDue(r.settlementDate);
+  if (reviewStage) {
+    const stageLabel = PRICE_REVIEW_STAGE_LABELS[reviewStage - 1] || `${reviewStage}回目`;
+    tags += `<span class="tag tag-price-review">値下げ検討${stageLabel}</span>`;
+  }
+  if (isSold) tags += `<span class="tag tag-sold">成約済み</span>`;
+  return `<tr class="${rowClass}">
       <td class="property-name-cell">${escapeHtml(r.propertyName || '')}</td>
       <td>${escapeHtml(r.lotName || '－')}</td>
       <td>${escapeHtml(r.staff || '')}</td>
@@ -279,11 +318,11 @@ function renderTable(list) {
         <div class="row-actions">
           <button class="btn btn-secondary btn-sm" onclick="openHistoryModal('${r.propertyId}','${r.id}')">履歴</button>
           <button class="btn btn-secondary btn-sm" onclick="openPropertyModal('${r.propertyId}')">編集</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleLotStatus('${r.propertyId}','${r.id}')">${isSold ? '販売中に戻す' : '成約済みにする'}</button>
           <button class="btn btn-danger btn-sm" onclick="deleteLot('${r.propertyId}','${r.id}')">削除</button>
         </div>
       </td>
     </tr>`;
-  }).join('');
 }
 
 function updateSortArrows() {
@@ -350,12 +389,15 @@ function bindModals() {
     editingLots.push(emptyLot());
     renderLotsEditor();
   });
-  document.getElementById('lots-container').addEventListener('input', function (e) {
+  const onLotFieldChange = function (e) {
     const field = e.target.getAttribute('data-field');
     const index = Number(e.target.getAttribute('data-lot-index'));
     if (field == null || Number.isNaN(index) || !editingLots[index]) return;
     editingLots[index][field] = e.target.value;
-  });
+  };
+  // input要素は'input'、select要素（ステータス）は'change'で発火するため両方拾う
+  document.getElementById('lots-container').addEventListener('input', onLotFieldChange);
+  document.getElementById('lots-container').addEventListener('change', onLotFieldChange);
   document.getElementById('lots-container').addEventListener('click', function (e) {
     const btn = e.target.closest('.lot-remove-btn');
     if (!btn) return;
@@ -376,7 +418,7 @@ function emptyLot() {
   return {
     id: generateId(),
     lotName: '', staff: '', startPrice: '', currentPrice: '', grossProfit: '',
-    settlementDate: '', salesStartDate: '',
+    settlementDate: '', salesStartDate: '', status: 'active',
   };
 }
 
@@ -400,6 +442,7 @@ function openPropertyModal(id) {
         grossProfit: lot.grossProfit != null ? lot.grossProfit : '',
         settlementDate: lot.settlementDate || '',
         salesStartDate: lot.salesStartDate || '',
+        status: lot.status === 'sold' ? 'sold' : 'active',
       };
     });
     document.getElementById('property-modal-delete-all').hidden = false;
@@ -429,6 +472,13 @@ function renderLotsEditor() {
       <div class="form-group">
         <label class="form-label">担当名</label>
         <input type="text" class="lot-field" data-field="staff" data-lot-index="${i}" value="${escapeHtmlAttr(lot.staff)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">ステータス</label>
+        <select class="lot-field" data-field="status" data-lot-index="${i}">
+          <option value="active" ${lot.status === 'sold' ? '' : 'selected'}>販売中</option>
+          <option value="sold" ${lot.status === 'sold' ? 'selected' : ''}>成約済み</option>
+        </select>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -510,6 +560,7 @@ function onSubmitPropertyForm(e) {
       grossProfit: Number(lot.grossProfit) || 0,
       settlementDate: lot.settlementDate || null,
       salesStartDate: lot.salesStartDate || null,
+      status: lot.status === 'sold' ? 'sold' : 'active',
       history,
       priceChangeDate,
     };
@@ -591,6 +642,28 @@ function deleteLot(propertyId, lotId) {
   }).catch(function (err) {
     console.error('区画削除エラー:', err);
     showToast('削除に失敗しました');
+  });
+}
+
+// 区画のステータス（販売中／成約済み）を切り替える。成約済みにしても削除ではないため
+// 実績（合計粗利・件数）や履歴はそのまま残り、状態フィルタで「成約済み」「すべて」を選べば集計できる
+function toggleLotStatus(propertyId, lotId) {
+  const p = propertiesById[propertyId];
+  if (!p) return;
+  const lot = (p.lots || []).find(function (l) { return l.id === lotId; });
+  if (!lot) return;
+  const nextStatus = lot.status === 'sold' ? 'active' : 'sold';
+  const newLots = p.lots.map(function (l) {
+    return l.id === lotId ? Object.assign({}, l, { status: nextStatus }) : l;
+  });
+  db.collection('properties').doc(propertyId).update({
+    lots: newLots,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }).then(function () {
+    showToast(nextStatus === 'sold' ? '成約済みにしました' : '販売中に戻しました');
+  }).catch(function (err) {
+    console.error('ステータス更新エラー:', err);
+    showToast('更新に失敗しました');
   });
 }
 
