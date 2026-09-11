@@ -335,4 +335,27 @@ body {
 @media (max-width: 720px) {
   .summary-grid { grid-template-columns: 1fr 1fr; }
   .toolbar-group { min-width: 100%; }
+
+  /* 文字が小さく読みにくいため、スマホでは主要な文字サイズを引き上げる */
+  body { font-size: 16px; }
+  .app-header h1 { font-size: 19px; }
+  .card-header { font-size: 15px; }
+  .property-table { font-size: 15px; }
+  .history-table { font-size: 14px; }
+  .tag { font-size: 13px; padding: 4px 11px; }
+  .stat-tile-label { font-size: 13px; }
+  .staff-summary-name { font-size: 13px; }
+  .form-label { font-size: 13.5px; }
+  .form-hint { font-size: 12.5px; }
+  .modal-header h2 { font-size: 17px; }
+  .btn-sm { font-size: 13px; padding: 8px 14px; }
+
+  /* iOSでフォーム入力時に自動ズームされるのを防ぐ（16px未満だとSafariが拡大してしまう） */
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group input[type="date"],
+  .toolbar select,
+  .toolbar input[type="text"] {
+    font-size: 16px;
+  }
 }
