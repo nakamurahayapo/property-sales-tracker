@@ -75,13 +75,14 @@
               <th data-sort-key="currentPrice" data-label="現在価格">現在価格</th>
               <th data-sort-key="grossProfit" data-label="粗利">粗利</th>
               <th data-sort-key="settlementDate" data-label="仕入決済予定日">仕入決済予定日</th>
+              <th data-sort-key="salesStartDate" data-label="販売開始日">販売開始日</th>
               <th data-sort-key="priceChangeDate" data-label="価格変更日">価格変更日</th>
               <th class="no-sort">状態</th>
               <th class="no-sort">操作</th>
             </tr>
           </thead>
           <tbody id="property-list-body">
-            <tr><td colspan="9"><div class="loading"><div class="loading-spinner"></div>読み込み中...</div></td></tr>
+            <tr><td colspan="10"><div class="loading"><div class="loading-spinner"></div>読み込み中...</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -125,6 +126,12 @@
             <div class="form-group">
               <label class="form-label">仕入決済予定日</label>
               <input type="date" id="field-settlementDate">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">販売開始日</label>
+              <input type="date" id="field-salesStartDate">
             </div>
           </div>
         </div>

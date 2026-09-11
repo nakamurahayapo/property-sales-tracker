@@ -79,22 +79,49 @@ function getSettlementAlert(settlementDate) {
 
 // ===== 値下げ検討アラート =====
 // 仕入決済予定日を過ぎてもなお登録されたまま（＝未成約）の物件について、
-// 仕入決済予定日から1ヶ月半（1ヶ月＋15日）経過したら「値下げ検討」を促す
+// 仕入決済予定日から1ヶ月半（1ヶ月＋15日）ごとに、半年後まで値下げ検討タイミングの予定を刻む。
+// 1回目（1ヶ月半後）は従来通り最初の値下げ検討通知として残し、2〜4回目（3ヶ月後・4ヶ月半後・半年後）を追加する。
 const PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT = 1;
 const PRICE_REVIEW_DAYS_AFTER_SETTLEMENT = 15;
+const PRICE_REVIEW_MAX_STAGES = 4; // 1ヶ月半 × 4 = 半年後まで
+const PRICE_REVIEW_STAGE_LABELS = ['①', '②', '③', '④'];
 
 // 値下げ検討予定日（仕入決済予定日から1ヶ月半後）をDateで返す。仕入決済予定日未設定ならnull
+// ※後方互換のため残す。getPriceReviewSchedule() の1回目（stage=1）と同じ値。
 function getPriceReviewDate(settlementDate) {
   const target = parseDateOnly(settlementDate);
   if (!target) return null;
   return new Date(target.getFullYear(), target.getMonth() + PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT, target.getDate() + PRICE_REVIEW_DAYS_AFTER_SETTLEMENT);
 }
 
-function isPriceReviewDue(settlementDate) {
-  const threshold = getPriceReviewDate(settlementDate);
-  if (!threshold) return false;
+// 値下げ検討予定日を1ヶ月半間隔で半年後まで並べた配列で返す。
+// 要素は { stage, date }。stage=1が1ヶ月半後、stage=4が半年後。仕入決済予定日未設定ならnull
+function getPriceReviewSchedule(settlementDate) {
+  const target = parseDateOnly(settlementDate);
+  if (!target) return null;
+  const schedule = [];
+  let cursor = target;
+  for (let stage = 1; stage <= PRICE_REVIEW_MAX_STAGES; stage++) {
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT, cursor.getDate() + PRICE_REVIEW_DAYS_AFTER_SETTLEMENT);
+    schedule.push({ stage, date: cursor });
+  }
+  return schedule;
+}
+
+// 到来済みの値下げ検討タイミングのうち、最新の段階番号を返す（未到来ならnull）
+function getPriceReviewStageDue(settlementDate) {
+  const schedule = getPriceReviewSchedule(settlementDate);
+  if (!schedule) return null;
   const today = parseDateOnly(getTodayString());
-  return today >= threshold;
+  let dueStage = null;
+  schedule.forEach(function (item) {
+    if (today >= item.date) dueStage = item.stage;
+  });
+  return dueStage;
+}
+
+function isPriceReviewDue(settlementDate) {
+  return getPriceReviewStageDue(settlementDate) != null;
 }
 
 // ===== 金額表示 =====

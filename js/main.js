@@ -37,7 +37,7 @@ function subscribeProperties() {
     console.error('物件一覧取得エラー:', err);
     showToast('データの取得に失敗しました');
     document.getElementById('property-list-body').innerHTML =
-      '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">⚠️</div>データの取得に失敗しました</div></td></tr>';
+      '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">⚠️</div>データの取得に失敗しました</div></td></tr>';
   });
 }
 
@@ -91,7 +91,7 @@ function getSortedProperties(list) {
       const cmp = av.localeCompare(bv, 'ja');
       return sortDir === 'asc' ? cmp : -cmp;
     }
-    if (sortKey === 'settlementDate' || sortKey === 'priceChangeDate') {
+    if (sortKey === 'settlementDate' || sortKey === 'salesStartDate' || sortKey === 'priceChangeDate') {
       // 未設定は常に末尾に回す
       if (!av && !bv) return 0;
       if (!av) return 1;
@@ -174,7 +174,7 @@ function renderTable(list) {
   const tbody = document.getElementById('property-list-body');
 
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🏠</div>' +
+    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🏠</div>' +
       (properties.length ? '条件に一致する物件がありません' : '物件が登録されていません') + '</div></td></tr>';
     return;
   }
@@ -187,8 +187,10 @@ function renderTable(list) {
       : alert.level === 'warning'
         ? `<span class="tag tag-warning">${alert.label}</span>`
         : '';
-    if (isPriceReviewDue(p.settlementDate)) {
-      tags += `<span class="tag tag-price-review">値下げ検討</span>`;
+    const reviewStage = getPriceReviewStageDue(p.settlementDate);
+    if (reviewStage) {
+      const stageLabel = PRICE_REVIEW_STAGE_LABELS[reviewStage - 1] || `${reviewStage}回目`;
+      tags += `<span class="tag tag-price-review">値下げ検討${stageLabel}</span>`;
     }
     return `<tr class="${rowClass}">
       <td class="property-name-cell">${escapeHtml(p.name || '')}</td>
@@ -197,6 +199,7 @@ function renderTable(list) {
       <td>${formatMan(p.currentPrice)}</td>
       <td>${formatMan(p.grossProfit)}</td>
       <td>${p.settlementDate ? formatDateJP(p.settlementDate) : '未設定'}</td>
+      <td>${p.salesStartDate ? formatDateJP(p.salesStartDate) : '－'}</td>
       <td>${p.priceChangeDate ? formatDateJP(p.priceChangeDate) : '－'}</td>
       <td><div class="tag-group">${tags}</div></td>
       <td>
@@ -289,6 +292,7 @@ function openPropertyModal(id) {
     document.getElementById('field-currentPrice').value = p.currentPrice != null ? p.currentPrice : '';
     document.getElementById('field-grossProfit').value = p.grossProfit != null ? p.grossProfit : '';
     document.getElementById('field-settlementDate').value = p.settlementDate || '';
+    document.getElementById('field-salesStartDate').value = p.salesStartDate || '';
   } else {
     document.getElementById('property-modal-title').textContent = '物件を新規登録';
   }
@@ -313,6 +317,7 @@ function onSubmitPropertyForm(e) {
   const currentPrice = Number(document.getElementById('field-currentPrice').value) || 0;
   const grossProfit = Number(document.getElementById('field-grossProfit').value) || 0;
   const settlementDate = document.getElementById('field-settlementDate').value || null;
+  const salesStartDate = document.getElementById('field-salesStartDate').value || null;
   const today = getTodayString();
 
   const submitBtn = document.getElementById('property-modal-submit');
@@ -332,7 +337,7 @@ function onSubmitPropertyForm(e) {
       priceChangeDate = today;
     }
     db.collection('properties').doc(editingId).update({
-      name, staff, startPrice, currentPrice, grossProfit, settlementDate,
+      name, staff, startPrice, currentPrice, grossProfit, settlementDate, salesStartDate,
       history, priceChangeDate,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }).then(function () {
@@ -344,7 +349,7 @@ function onSubmitPropertyForm(e) {
     }).finally(finish);
   } else {
     db.collection('properties').add({
-      name, staff, startPrice, currentPrice, grossProfit, settlementDate,
+      name, staff, startPrice, currentPrice, grossProfit, settlementDate, salesStartDate,
       history: [{ date: today, price: currentPrice }],
       priceChangeDate: today,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -410,8 +415,8 @@ function closeHistoryModal() {
 }
 
 // 価格推移の折れ線グラフ（外部ライブラリなし・SVG自前描画）
-// settlementDate（仕入決済予定日）が設定されていれば、その1ヶ月半後＝値下げ検討予定日を
-// 縦の点線で重ねて表示する。x軸は日付の実際の間隔に比例させ、予定日の位置も正しく反映する
+// settlementDate（仕入決済予定日）が設定されていれば、そこから1ヶ月半ごと・半年後までの
+// 値下げ検討予定日を縦の点線で重ねて表示する。x軸は日付の実際の間隔に比例させ、各予定日の位置も正しく反映する
 function renderHistoryChart(rows, settlementDate) {
   const wrap = document.getElementById('history-chart-wrap');
   if (!rows.length) {
@@ -420,13 +425,16 @@ function renderHistoryChart(rows, settlementDate) {
   }
 
   const width = 560, height = 220;
-  const padLeft = 56, padRight = 20, padTop = 34, padBottom = 34;
+  const reviewSchedule = getPriceReviewSchedule(settlementDate) || [];
+  // 予定日ラベルを段数分だけ縦に積むため、件数に応じて上部余白を広げる（最低34px）
+  const padLeft = 56, padRight = 20, padBottom = 34;
+  const padTop = Math.max(34, 14 + reviewSchedule.length * 13 + 6);
   const innerW = width - padLeft - padRight;
   const innerH = height - padTop - padBottom;
 
-  const reviewDate = getPriceReviewDate(settlementDate);
   const historyDates = rows.map(function (r) { return parseDateOnly(r.date); });
-  const allTimes = (reviewDate ? historyDates.concat([reviewDate]) : historyDates).map(function (d) { return d.getTime(); });
+  const allTimes = historyDates.concat(reviewSchedule.map(function (item) { return item.date; }))
+    .map(function (d) { return d.getTime(); });
   const minTime = Math.min.apply(null, allTimes);
   const maxTime = Math.max.apply(null, allTimes);
   const timeSpan = maxTime - minTime;
@@ -473,17 +481,23 @@ function renderHistoryChart(rows, settlementDate) {
     }
   });
 
-  // 値下げ検討予定日（仕入決済予定日+1ヶ月半）の縦線マーカー
+  // 値下げ検討予定日（仕入決済予定日から1ヶ月半ごと・半年後まで）の縦線マーカー
+  // 到来済みの予定日は危険色の実線的な強調、未到来の予定日はゴールドで区別する
+  const today = parseDateOnly(getTodayString());
   let reviewMarker = '';
-  if (reviewDate) {
-    const rx = xForTime(reviewDate.getTime());
+  reviewSchedule.forEach(function (item, i) {
+    const rx = xForTime(item.date.getTime());
     const labelOnRight = rx < width / 2;
     const anchor = labelOnRight ? 'start' : 'end';
     const labelX = labelOnRight ? rx + 6 : rx - 6;
-    reviewMarker = `
-      <line x1="${rx.toFixed(1)}" y1="14" x2="${rx.toFixed(1)}" y2="${height - padBottom}" stroke="${BRAND_COLORS.danger}" stroke-width="1.5" stroke-dasharray="4,3"></line>
-      <text x="${labelX.toFixed(1)}" y="11" text-anchor="${anchor}" font-size="11" font-weight="700" fill="${BRAND_COLORS.danger}">値下げ検討予定 ${escapeHtml(formatDateShortFromDate(reviewDate))}</text>`;
-  }
+    const labelY = 11 + i * 13;
+    const isDue = today >= item.date;
+    const color = isDue ? BRAND_COLORS.danger : BRAND_COLORS.gold;
+    const stageLabel = PRICE_REVIEW_STAGE_LABELS[item.stage - 1] || `${item.stage}回目`;
+    reviewMarker += `
+      <line x1="${rx.toFixed(1)}" y1="14" x2="${rx.toFixed(1)}" y2="${height - padBottom}" stroke="${color}" stroke-width="1.5" stroke-dasharray="4,3"></line>
+      <text x="${labelX.toFixed(1)}" y="${labelY}" text-anchor="${anchor}" font-size="11" font-weight="700" fill="${color}">${stageLabel} ${escapeHtml(formatDateShortFromDate(item.date))}</text>`;
+  });
 
   wrap.innerHTML = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="xMinYMin meet">
     ${gridLines}

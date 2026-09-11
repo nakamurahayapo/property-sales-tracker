@@ -98,7 +98,7 @@ kaitorischedule/
   - 仕入決済予定日が今日より過去 → 行を赤色表示＋「期限超過」タグ
   - 仕入決済予定日まで7日以内 → 行をゴールド表示＋「残り○日」タグ
   - 閾値は `js/config.js` の `SETTLEMENT_ALERT_DAYS` で変更できます
-- **値下げ検討アラート**：仕入決済予定日を1ヶ月半（1ヶ月＋15日）過ぎても登録されたまま（＝未成約）の物件に「値下げ検討」タグを表示。あくまで画面上の注意喚起で、価格自体は今まで通り人が編集します（自動での価格書き換えは行いません）。閾値は `js/config.js` の `PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT` / `PRICE_REVIEW_DAYS_AFTER_SETTLEMENT` で変更できます
+- **値下げ検討アラート**：仕入決済予定日を起点に、1ヶ月半（1ヶ月＋15日）ごと・半年後まで（①1ヶ月半後／②3ヶ月後／③4ヶ月半後／④半年後の4段階）値下げ検討タイミングの予定を刻み、登録されたまま（＝未成約）の物件には到来済みの段階を「値下げ検討①」〜「値下げ検討④」タグで表示。あくまで画面上の注意喚起で、価格自体は今まで通り人が編集します（自動での価格書き換えは行いません）。「履歴」モーダルのグラフにも全4段階の予定日を縦線で表示（到来済みは赤、未到来はゴールド）。間隔・段階数は `js/config.js` の `PRICE_REVIEW_MONTHS_AFTER_SETTLEMENT` / `PRICE_REVIEW_DAYS_AFTER_SETTLEMENT` / `PRICE_REVIEW_MAX_STAGES` で変更できます
 - **一覧グラフ**：物件別の粗利比較を横棒グラフで表示（フィルタ・検索結果と連動）
 - **フィルタ・検索**：担当名で絞り込み、物件名で部分一致検索
 - **ソート**：テーブルヘッダーをクリックして物件名／担当／各価格／仕入決済予定日／価格変更日で並び替え（再クリックで昇順・降順切り替え）
@@ -114,6 +114,7 @@ kaitorischedule/
 | currentPrice | number | 現在価格（万円） |
 | grossProfit | number | 粗利（万円） |
 | settlementDate | date (string) | 仕入決済予定日（`YYYY-MM-DD`） |
+| salesStartDate | date (string) | 販売開始日（`YYYY-MM-DD`） |
 | priceChangeDate | date (string) | 価格変更日（直近の変更日） |
 | history | array | 価格変更履歴。要素は `{ date, price }` |
 | updatedAt | timestamp | 更新日時 |
