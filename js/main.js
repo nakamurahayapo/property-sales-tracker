@@ -1,17 +1,22 @@
 // ============================================================
 //  買取再販 物件販売管理アプリ - メインロジック
+//  データモデル：1物件（案件）は複数の区画（lots配列）を持つ。
+//  旧形式（区画なし・物件直下に価格等を持つ）のドキュメントは
+//  読み込み時に「区画1件」へ自動変換し、保存時に新形式へ移行する。
 // ============================================================
 
-let properties = [];       // Firestoreから取得した物件一覧（生データ）
+let properties = [];       // Firestoreから取得した物件一覧（各要素は正規化済みで必ず lots 配列を持つ）
 let propertiesById = {};   // id -> 物件データ（編集時の差分判定に使用）
 
 let filterStaff = '';      // 担当名フィルタ（空文字＝すべて）
-let searchText = '';       // 物件名検索
+let searchText = '';       // 物件名・区画名検索
 let sortKey = 'settlementDate';
 let sortDir = 'asc';
 
 let editingId = null;      // 編集中の物件id（null＝新規登録）
+let editingLots = [];      // 編集モーダル内で操作中の区画データ（配列）
 let historyPropertyId = null;
+let historyLotId = null;
 
 document.addEventListener('DOMContentLoaded', function () {
   bindToolbar();
@@ -19,6 +24,37 @@ document.addEventListener('DOMContentLoaded', function () {
   bindSortableHeaders();
   subscribeProperties();
 });
+
+// ===== ID生成（区画の識別用） =====
+
+function generateId() {
+  return 'lot_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// ===== 旧形式（区画なし）ドキュメントの正規化 =====
+// 物件ドキュメントに lots 配列がなければ、物件直下の旧フィールドから区画1件を合成する。
+// 保存（更新）時には新形式（lots配列のみ）で書き込み、旧フィールドは削除する。
+function normalizeProperty(data) {
+  if (Array.isArray(data.lots) && data.lots.length) {
+    data.lots = data.lots.map(function (lot) {
+      return Object.assign({ id: lot.id || generateId(), lotName: lot.lotName || '', history: lot.history || [] }, lot);
+    });
+    return data;
+  }
+  data.lots = [{
+    id: 'legacy',
+    lotName: '',
+    staff: data.staff || '',
+    startPrice: data.startPrice || 0,
+    currentPrice: data.currentPrice || 0,
+    grossProfit: data.grossProfit || 0,
+    settlementDate: data.settlementDate || null,
+    salesStartDate: data.salesStartDate || null,
+    priceChangeDate: data.priceChangeDate || null,
+    history: data.history || [],
+  }];
+  return data;
+}
 
 // ===== Firestore購読 =====
 
@@ -28,7 +64,7 @@ function subscribeProperties() {
     properties = [];
     propertiesById = {};
     snapshot.forEach(function (doc) {
-      const data = Object.assign({ id: doc.id }, doc.data());
+      const data = normalizeProperty(Object.assign({ id: doc.id }, doc.data()));
       properties.push(data);
       propertiesById[doc.id] = data;
     });
@@ -37,8 +73,25 @@ function subscribeProperties() {
     console.error('物件一覧取得エラー:', err);
     showToast('データの取得に失敗しました');
     document.getElementById('property-list-body').innerHTML =
-      '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">⚠️</div>データの取得に失敗しました</div></td></tr>';
+      '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">⚠️</div>データの取得に失敗しました</div></td></tr>';
   });
+}
+
+// ===== 物件→区画への平坦化 =====
+// 一覧・グラフ・集計はすべて「区画」を1行として扱う（1物件＝複数行になり得る）
+
+function flattenLots() {
+  const rows = [];
+  properties.forEach(function (p) {
+    (p.lots || []).forEach(function (lot) {
+      rows.push(Object.assign({}, lot, {
+        propertyId: p.id,
+        propertyName: p.name || '',
+        isOnlyLot: (p.lots || []).length <= 1,
+      }));
+    });
+  });
+  return rows;
 }
 
 // ===== フィルタ・検索・ソート =====
@@ -72,26 +125,36 @@ function bindSortableHeaders() {
   });
 }
 
-function getFilteredProperties() {
-  return properties.filter(function (p) {
-    if (filterStaff && p.staff !== filterStaff) return false;
-    if (searchText && !(p.name || '').toLowerCase().includes(searchText.toLowerCase())) return false;
+function getFilteredRows(rows) {
+  const needle = searchText.toLowerCase();
+  return rows.filter(function (r) {
+    if (filterStaff && r.staff !== filterStaff) return false;
+    if (needle) {
+      const haystack = ((r.propertyName || '') + ' ' + (r.lotName || '')).toLowerCase();
+      if (!haystack.includes(needle)) return false;
+    }
     return true;
   });
 }
 
-function getSortedProperties(list) {
+function getSortedRows(list) {
   const sorted = list.slice();
   sorted.sort(function (a, b) {
-    let av = a[sortKey];
-    let bv = b[sortKey];
-    if (sortKey === 'name' || sortKey === 'staff') {
-      av = (av || '').toString();
-      bv = (bv || '').toString();
+    let av, bv;
+    if (sortKey === 'name') {
+      // 物件名でまとめて並ぶよう、物件名→区画名の順で比較する
+      const cmp = (a.propertyName || '').localeCompare(b.propertyName || '', 'ja')
+        || (a.lotName || '').localeCompare(b.lotName || '', 'ja');
+      return sortDir === 'asc' ? cmp : -cmp;
+    }
+    if (sortKey === 'lotName' || sortKey === 'staff') {
+      av = (a[sortKey] || '').toString();
+      bv = (b[sortKey] || '').toString();
       const cmp = av.localeCompare(bv, 'ja');
       return sortDir === 'asc' ? cmp : -cmp;
     }
     if (sortKey === 'settlementDate' || sortKey === 'salesStartDate' || sortKey === 'priceChangeDate') {
+      av = a[sortKey]; bv = b[sortKey];
       // 未設定は常に末尾に回す
       if (!av && !bv) return 0;
       if (!av) return 1;
@@ -100,8 +163,8 @@ function getSortedProperties(list) {
       return sortDir === 'asc' ? cmp : -cmp;
     }
     // 数値項目（startPrice / currentPrice / grossProfit）
-    av = Number(av) || 0;
-    bv = Number(bv) || 0;
+    av = Number(a[sortKey]) || 0;
+    bv = Number(b[sortKey]) || 0;
     const cmp = av - bv;
     return sortDir === 'asc' ? cmp : -cmp;
   });
@@ -110,9 +173,9 @@ function getSortedProperties(list) {
 
 // ===== 担当名フィルタの選択肢を更新 =====
 
-function updateStaffOptions() {
+function updateStaffOptions(rows) {
   const select = document.getElementById('filter-staff');
-  const staffNames = Array.from(new Set(properties.map(function (p) { return p.staff; }).filter(Boolean))).sort(function (a, b) {
+  const staffNames = Array.from(new Set(rows.map(function (r) { return r.staff; }).filter(Boolean))).sort(function (a, b) {
     return a.localeCompare(b, 'ja');
   });
   const current = select.value;
@@ -124,9 +187,10 @@ function updateStaffOptions() {
 // ===== 描画 =====
 
 function render() {
-  updateStaffOptions();
-  const filtered = getFilteredProperties();
-  const sorted = getSortedProperties(filtered);
+  const allRows = flattenLots();
+  updateStaffOptions(allRows);
+  const filtered = getFilteredRows(allRows);
+  const sorted = getSortedRows(filtered);
 
   renderSummary(filtered);
   renderStaffSummary(filtered);
@@ -136,14 +200,17 @@ function render() {
 }
 
 function renderSummary(list) {
-  const count = list.length;
-  const totalGrossProfit = list.reduce(function (sum, p) { return sum + (Number(p.grossProfit) || 0); }, 0);
-  const dueSoonCount = list.filter(function (p) {
-    const alert = getSettlementAlert(p.settlementDate);
+  // list は区画（lot）単位。「物件数」は区画数と別物なので、区画が属する物件の重複なし件数を数える
+  const propertyCount = new Set(list.map(function (r) { return r.propertyId; })).size;
+  const lotCount = list.length;
+  const totalGrossProfit = list.reduce(function (sum, r) { return sum + (Number(r.grossProfit) || 0); }, 0);
+  const dueSoonCount = list.filter(function (r) {
+    const alert = getSettlementAlert(r.settlementDate);
     return alert.level === 'warning' || alert.level === 'overdue';
   }).length;
 
-  document.getElementById('stat-count').textContent = count;
+  document.getElementById('stat-count').textContent = propertyCount;
+  document.getElementById('stat-lot-count').textContent = lotCount;
   document.getElementById('stat-gross-profit').textContent = totalGrossProfit.toLocaleString('ja-JP');
   document.getElementById('stat-due-soon').textContent = dueSoonCount;
 }
@@ -151,9 +218,9 @@ function renderSummary(list) {
 function renderStaffSummary(list) {
   const wrap = document.getElementById('staff-summary-list');
   const totals = {};
-  list.forEach(function (p) {
-    const staff = p.staff || '（未設定）';
-    totals[staff] = (totals[staff] || 0) + (Number(p.grossProfit) || 0);
+  list.forEach(function (r) {
+    const staff = r.staff || '（未設定）';
+    totals[staff] = (totals[staff] || 0) + (Number(r.grossProfit) || 0);
   });
   const names = Object.keys(totals).sort(function (a, b) { return a.localeCompare(b, 'ja'); });
 
@@ -170,43 +237,49 @@ function renderStaffSummary(list) {
   }).join('');
 }
 
+// 区画の表示名（物件名＋区画名。区画名が空なら物件名のみ）
+function rowDisplayName(r) {
+  return r.lotName ? `${r.propertyName} / ${r.lotName}` : r.propertyName;
+}
+
 function renderTable(list) {
   const tbody = document.getElementById('property-list-body');
 
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🏠</div>' +
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🏠</div>' +
       (properties.length ? '条件に一致する物件がありません' : '物件が登録されていません') + '</div></td></tr>';
     return;
   }
 
-  tbody.innerHTML = list.map(function (p) {
-    const alert = getSettlementAlert(p.settlementDate);
+  tbody.innerHTML = list.map(function (r) {
+    const alert = getSettlementAlert(r.settlementDate);
     const rowClass = alert.level === 'overdue' ? 'row-overdue' : alert.level === 'warning' ? 'row-warning' : '';
     let tags = alert.level === 'overdue'
       ? `<span class="tag tag-overdue">${alert.label}</span>`
       : alert.level === 'warning'
         ? `<span class="tag tag-warning">${alert.label}</span>`
         : '';
-    const reviewStage = getPriceReviewStageDue(p.settlementDate);
+    const reviewStage = getPriceReviewStageDue(r.settlementDate);
     if (reviewStage) {
       const stageLabel = PRICE_REVIEW_STAGE_LABELS[reviewStage - 1] || `${reviewStage}回目`;
       tags += `<span class="tag tag-price-review">値下げ検討${stageLabel}</span>`;
     }
     return `<tr class="${rowClass}">
-      <td class="property-name-cell">${escapeHtml(p.name || '')}</td>
-      <td>${escapeHtml(p.staff || '')}</td>
-      <td>${formatMan(p.startPrice)}</td>
-      <td>${formatMan(p.currentPrice)}</td>
-      <td>${formatMan(p.grossProfit)}</td>
-      <td>${p.settlementDate ? formatDateJP(p.settlementDate) : '未設定'}</td>
-      <td>${p.salesStartDate ? formatDateJP(p.salesStartDate) : '－'}</td>
-      <td>${p.priceChangeDate ? formatDateJP(p.priceChangeDate) : '－'}</td>
+      <td class="property-name-cell">${escapeHtml(r.propertyName || '')}</td>
+      <td>${escapeHtml(r.lotName || '－')}</td>
+      <td>${escapeHtml(r.staff || '')}</td>
+      <td>${formatMan(r.startPrice)}</td>
+      <td>${formatMan(r.currentPrice)}</td>
+      <td>${formatMan(r.grossProfit)}</td>
+      <td>${r.settlementDate ? formatDateJP(r.settlementDate) : '未設定'}</td>
+      <td>${r.salesStartDate ? formatDateJP(r.salesStartDate) : '－'}</td>
+      <td>${r.priceChangeDate ? formatDateJP(r.priceChangeDate) : '－'}</td>
       <td><div class="tag-group">${tags}</div></td>
       <td>
         <div class="row-actions">
-          <button class="btn btn-secondary btn-sm" onclick="openHistoryModal('${p.id}')">履歴</button>
-          <button class="btn btn-secondary btn-sm" onclick="openPropertyModal('${p.id}')">編集</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteProperty('${p.id}')">削除</button>
+          <button class="btn btn-secondary btn-sm" onclick="openHistoryModal('${r.propertyId}','${r.id}')">履歴</button>
+          <button class="btn btn-secondary btn-sm" onclick="openPropertyModal('${r.propertyId}')">編集</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteLot('${r.propertyId}','${r.id}')">削除</button>
         </div>
       </td>
     </tr>`;
@@ -248,18 +321,18 @@ function renderGrossProfitChart(list) {
   const totalWidth = labelWidth + barAreaWidth + valueColWidth;
   const topPad = 8;
   const height = sorted.length * rowHeight + topPad * 2;
-  const maxValue = Math.max(1, ...sorted.map(function (p) { return Math.max(0, Number(p.grossProfit) || 0); }));
+  const maxValue = Math.max(1, ...sorted.map(function (r) { return Math.max(0, Number(r.grossProfit) || 0); }));
 
   let bars = '';
-  sorted.forEach(function (p, i) {
-    const value = Number(p.grossProfit) || 0;
+  sorted.forEach(function (r, i) {
+    const value = Number(r.grossProfit) || 0;
     const isNeg = value < 0;
     const rowY = topPad + i * rowHeight;
     const barY = rowY + (rowHeight - barHeight) / 2;
     const w = Math.max(0, value) / maxValue * barAreaWidth;
     const textY = rowY + rowHeight / 2 + 4;
     bars += `
-      <text x="${labelWidth - 8}" y="${textY}" text-anchor="end" font-size="12" fill="${BRAND_COLORS.navy}">${escapeHtml(truncateLabel(p.name, 16))}</text>
+      <text x="${labelWidth - 8}" y="${textY}" text-anchor="end" font-size="12" fill="${BRAND_COLORS.navy}">${escapeHtml(truncateLabel(rowDisplayName(r), 16))}</text>
       <rect x="${labelWidth}" y="${barY}" width="${w}" height="${barHeight}" rx="3" fill="${isNeg ? BRAND_COLORS.danger : BRAND_COLORS.gold}"></rect>
       <text x="${labelWidth + barAreaWidth + 8}" y="${textY}" font-size="12" fill="${isNeg ? BRAND_COLORS.danger : BRAND_COLORS.navySub}">${formatMan(value)}</text>`;
   });
@@ -273,8 +346,38 @@ function bindModals() {
   document.getElementById('property-form').addEventListener('submit', onSubmitPropertyForm);
   document.getElementById('property-modal-close').addEventListener('click', closePropertyModal);
   document.getElementById('property-modal-cancel').addEventListener('click', closePropertyModal);
+  document.getElementById('add-lot-btn').addEventListener('click', function () {
+    editingLots.push(emptyLot());
+    renderLotsEditor();
+  });
+  document.getElementById('lots-container').addEventListener('input', function (e) {
+    const field = e.target.getAttribute('data-field');
+    const index = Number(e.target.getAttribute('data-lot-index'));
+    if (field == null || Number.isNaN(index) || !editingLots[index]) return;
+    editingLots[index][field] = e.target.value;
+  });
+  document.getElementById('lots-container').addEventListener('click', function (e) {
+    const btn = e.target.closest('.lot-remove-btn');
+    if (!btn) return;
+    const index = Number(btn.getAttribute('data-lot-index'));
+    if (Number.isNaN(index) || editingLots.length <= 1) return;
+    editingLots.splice(index, 1);
+    renderLotsEditor();
+  });
+  document.getElementById('property-modal-delete-all').addEventListener('click', function () {
+    if (!editingId) return;
+    deleteProperty(editingId);
+  });
   document.getElementById('history-modal-close').addEventListener('click', closeHistoryModal);
   document.getElementById('history-modal-ok').addEventListener('click', closeHistoryModal);
+}
+
+function emptyLot() {
+  return {
+    id: generateId(),
+    lotName: '', staff: '', startPrice: '', currentPrice: '', grossProfit: '',
+    settlementDate: '', salesStartDate: '',
+  };
 }
 
 function openPropertyModal(id) {
@@ -287,22 +390,81 @@ function openPropertyModal(id) {
     if (!p) return;
     document.getElementById('property-modal-title').textContent = '物件を編集';
     document.getElementById('field-name').value = p.name || '';
-    document.getElementById('field-staff').value = p.staff || '';
-    document.getElementById('field-startPrice').value = p.startPrice != null ? p.startPrice : '';
-    document.getElementById('field-currentPrice').value = p.currentPrice != null ? p.currentPrice : '';
-    document.getElementById('field-grossProfit').value = p.grossProfit != null ? p.grossProfit : '';
-    document.getElementById('field-settlementDate').value = p.settlementDate || '';
-    document.getElementById('field-salesStartDate').value = p.salesStartDate || '';
+    editingLots = (p.lots || []).map(function (lot) {
+      return {
+        id: lot.id,
+        lotName: lot.lotName || '',
+        staff: lot.staff || '',
+        startPrice: lot.startPrice != null ? lot.startPrice : '',
+        currentPrice: lot.currentPrice != null ? lot.currentPrice : '',
+        grossProfit: lot.grossProfit != null ? lot.grossProfit : '',
+        settlementDate: lot.settlementDate || '',
+        salesStartDate: lot.salesStartDate || '',
+      };
+    });
+    document.getElementById('property-modal-delete-all').hidden = false;
   } else {
     document.getElementById('property-modal-title').textContent = '物件を新規登録';
+    editingLots = [emptyLot()];
+    document.getElementById('property-modal-delete-all').hidden = true;
   }
 
+  renderLotsEditor();
   document.getElementById('property-modal-overlay').hidden = false;
+}
+
+function renderLotsEditor() {
+  const container = document.getElementById('lots-container');
+  const onlyOneLot = editingLots.length <= 1;
+  container.innerHTML = editingLots.map(function (lot, i) {
+    return `<div class="lot-fieldset" data-lot-index="${i}">
+      <div class="lot-fieldset-header">
+        <span class="lot-fieldset-title">区画 ${i + 1}</span>
+        <button type="button" class="btn btn-danger btn-sm lot-remove-btn" data-lot-index="${i}" ${onlyOneLot ? 'disabled' : ''}>この区画を削除</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">区画名（号地など。1区画のみなら空欄でOK）</label>
+        <input type="text" class="lot-field" data-field="lotName" data-lot-index="${i}" value="${escapeHtmlAttr(lot.lotName)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">担当名</label>
+        <input type="text" class="lot-field" data-field="staff" data-lot-index="${i}" value="${escapeHtmlAttr(lot.staff)}">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">販売開始価格（万円）</label>
+          <input type="number" step="1" class="lot-field" data-field="startPrice" data-lot-index="${i}" value="${escapeHtmlAttr(lot.startPrice)}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">現在価格（万円）</label>
+          <input type="number" step="1" class="lot-field" data-field="currentPrice" data-lot-index="${i}" value="${escapeHtmlAttr(lot.currentPrice)}">
+          <div class="form-hint">保存時に前回と値が変われば価格変更履歴に自動追加されます</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">粗利（万円）</label>
+          <input type="number" step="1" class="lot-field" data-field="grossProfit" data-lot-index="${i}" value="${escapeHtmlAttr(lot.grossProfit)}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">仕入決済予定日</label>
+          <input type="date" class="lot-field" data-field="settlementDate" data-lot-index="${i}" value="${escapeHtmlAttr(lot.settlementDate)}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">販売開始日</label>
+          <input type="date" class="lot-field" data-field="salesStartDate" data-lot-index="${i}" value="${escapeHtmlAttr(lot.salesStartDate)}">
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function closePropertyModal() {
   document.getElementById('property-modal-overlay').hidden = true;
   editingId = null;
+  editingLots = [];
 }
 
 function onSubmitPropertyForm(e) {
@@ -312,33 +474,58 @@ function onSubmitPropertyForm(e) {
     showToast('物件名を入力してください');
     return;
   }
-  const staff = document.getElementById('field-staff').value.trim();
-  const startPrice = Number(document.getElementById('field-startPrice').value) || 0;
-  const currentPrice = Number(document.getElementById('field-currentPrice').value) || 0;
-  const grossProfit = Number(document.getElementById('field-grossProfit').value) || 0;
-  const settlementDate = document.getElementById('field-settlementDate').value || null;
-  const salesStartDate = document.getElementById('field-salesStartDate').value || null;
+  if (!editingLots.length) {
+    showToast('区画を1件以上登録してください');
+    return;
+  }
+
   const today = getTodayString();
+  const prev = editingId ? propertiesById[editingId] : null;
+  const prevLotsById = {};
+  (prev && prev.lots || []).forEach(function (lot) { prevLotsById[lot.id] = lot; });
+
+  const newLots = editingLots.map(function (lot) {
+    const currentPrice = Number(lot.currentPrice) || 0;
+    const prevLot = prevLotsById[lot.id];
+    let history, priceChangeDate;
+    if (!prevLot) {
+      // 新規区画（新規物件、または編集中に追加された区画）：初回登録として履歴を開始
+      history = [{ date: today, price: currentPrice }];
+      priceChangeDate = today;
+    } else {
+      const priceChanged = Number(prevLot.currentPrice) !== currentPrice;
+      history = (prevLot.history || []).slice();
+      priceChangeDate = prevLot.priceChangeDate || null;
+      if (priceChanged) {
+        history.push({ date: today, price: currentPrice });
+        priceChangeDate = today;
+      }
+    }
+    return {
+      id: lot.id,
+      lotName: (lot.lotName || '').trim(),
+      staff: (lot.staff || '').trim(),
+      startPrice: Number(lot.startPrice) || 0,
+      currentPrice,
+      grossProfit: Number(lot.grossProfit) || 0,
+      settlementDate: lot.settlementDate || null,
+      salesStartDate: lot.salesStartDate || null,
+      history,
+      priceChangeDate,
+    };
+  });
 
   const submitBtn = document.getElementById('property-modal-submit');
   submitBtn.disabled = true;
-
-  const finish = function () {
-    submitBtn.disabled = false;
-  };
+  const finish = function () { submitBtn.disabled = false; };
 
   if (editingId) {
-    const prev = propertiesById[editingId];
-    const priceChanged = prev && Number(prev.currentPrice) !== currentPrice;
-    let history = (prev && prev.history) ? prev.history.slice() : [];
-    let priceChangeDate = (prev && prev.priceChangeDate) || null;
-    if (priceChanged) {
-      history.push({ date: today, price: currentPrice });
-      priceChangeDate = today;
-    }
+    // 旧形式で残っていた物件直下のフィールドは新形式（lots配列）への移行のため削除する
+    const del = firebase.firestore.FieldValue.delete();
     db.collection('properties').doc(editingId).update({
-      name, staff, startPrice, currentPrice, grossProfit, settlementDate, salesStartDate,
-      history, priceChangeDate,
+      name, lots: newLots,
+      staff: del, startPrice: del, currentPrice: del, grossProfit: del,
+      settlementDate: del, salesStartDate: del, priceChangeDate: del, history: del,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }).then(function () {
       showToast('物件を更新しました');
@@ -349,9 +536,7 @@ function onSubmitPropertyForm(e) {
     }).finally(finish);
   } else {
     db.collection('properties').add({
-      name, staff, startPrice, currentPrice, grossProfit, settlementDate, salesStartDate,
-      history: [{ date: today, price: currentPrice }],
-      priceChangeDate: today,
+      name, lots: newLots,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }).then(function () {
       showToast('物件を登録しました');
@@ -363,27 +548,65 @@ function onSubmitPropertyForm(e) {
   }
 }
 
+// 物件を丸ごと削除（全区画）
 function deleteProperty(id) {
   const p = propertiesById[id];
   if (!p) return;
-  if (!confirm(`「${p.name}」を削除します。よろしいですか？`)) return;
+  if (!confirm(`「${p.name}」を区画ごとすべて削除します。よろしいですか？`)) return;
   db.collection('properties').doc(id).delete().then(function () {
     showToast('物件を削除しました');
+    if (editingId === id) closePropertyModal();
   }).catch(function (err) {
     console.error('物件削除エラー:', err);
     showToast('削除に失敗しました');
   });
 }
 
+// 区画を1件だけ削除。その物件に残る区画がなくなる場合は物件ごと削除する
+function deleteLot(propertyId, lotId) {
+  const p = propertiesById[propertyId];
+  if (!p) return;
+  const lot = (p.lots || []).find(function (l) { return l.id === lotId; });
+  if (!lot) return;
+  const label = lot.lotName ? `${p.name} / ${lot.lotName}` : p.name;
+
+  if ((p.lots || []).length <= 1) {
+    if (!confirm(`「${label}」を削除します（この物件最後の区画のため物件ごと削除されます）。よろしいですか？`)) return;
+    db.collection('properties').doc(propertyId).delete().then(function () {
+      showToast('物件を削除しました');
+    }).catch(function (err) {
+      console.error('物件削除エラー:', err);
+      showToast('削除に失敗しました');
+    });
+    return;
+  }
+
+  if (!confirm(`区画「${label}」を削除します。よろしいですか？`)) return;
+  const newLots = p.lots.filter(function (l) { return l.id !== lotId; });
+  db.collection('properties').doc(propertyId).update({
+    lots: newLots,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }).then(function () {
+    showToast('区画を削除しました');
+  }).catch(function (err) {
+    console.error('区画削除エラー:', err);
+    showToast('削除に失敗しました');
+  });
+}
+
 // ===== 履歴モーダル =====
 
-function openHistoryModal(id) {
-  const p = propertiesById[id];
+function openHistoryModal(propertyId, lotId) {
+  const p = propertiesById[propertyId];
   if (!p) return;
-  historyPropertyId = id;
+  const lot = (p.lots || []).find(function (l) { return l.id === lotId; });
+  if (!lot) return;
+  historyPropertyId = propertyId;
+  historyLotId = lotId;
 
-  document.getElementById('history-modal-title').textContent = `${p.name} の価格推移`;
-  const rows = computeHistoryWithDiff(p.history);
+  const displayName = lot.lotName ? `${p.name} / ${lot.lotName}` : p.name;
+  document.getElementById('history-modal-title').textContent = `${displayName} の価格推移`;
+  const rows = computeHistoryWithDiff(lot.history);
 
   const tbody = document.getElementById('history-table-body');
   if (!rows.length) {
@@ -405,13 +628,14 @@ function openHistoryModal(id) {
     }).join('');
   }
 
-  renderHistoryChart(rows, p.settlementDate);
+  renderHistoryChart(rows, lot.settlementDate);
   document.getElementById('history-modal-overlay').hidden = false;
 }
 
 function closeHistoryModal() {
   document.getElementById('history-modal-overlay').hidden = true;
   historyPropertyId = null;
+  historyLotId = null;
 }
 
 // 価格推移の折れ線グラフ（外部ライブラリなし・SVG自前描画）
@@ -529,4 +753,9 @@ function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
+}
+
+// フォーム入力欄のvalue属性用（0やnullを空文字と区別せず安全に埋め込む）
+function escapeHtmlAttr(value) {
+  return escapeHtml(value == null ? '' : value);
 }
