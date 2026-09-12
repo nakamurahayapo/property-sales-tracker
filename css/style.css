@@ -190,6 +190,7 @@ body {
 .property-table tr.row-sold:hover td { background: var(--primary-light); }
 
 .property-name-cell { font-weight: 700; white-space: normal; min-width: 140px; }
+.map-link { text-decoration: none; margin-left: 2px; }
 
 /* 物件ごとの小計行（物件名ソート時、区画が2件以上のときだけ表示） */
 .property-group-row td {

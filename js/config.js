@@ -68,6 +68,13 @@ async function uploadFiles(fileList) {
   return results;
 }
 
+// ===== 所在地（Googleマップ） =====
+
+// 住所文字列からGoogleマップの検索URLを組み立てる（APIキー不要）
+function getGoogleMapsUrl(address) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
 // ===== 日付ユーティリティ =====
 
 function getTodayString() {

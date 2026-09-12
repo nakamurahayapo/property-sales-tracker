@@ -90,6 +90,7 @@ function flattenLots() {
       rows.push(Object.assign({}, lot, {
         propertyId: p.id,
         propertyName: p.name || '',
+        propertyAddress: p.address || '',
         isOnlyLot: (p.lots || []).length <= 1,
       }));
     });
@@ -281,9 +282,12 @@ function renderTable(list) {
 function renderPropertyGroupRow(group) {
   const soldCount = group.filter(function (r) { return r.status === 'sold'; }).length;
   const totalGrossProfit = group.reduce(function (sum, r) { return sum + (Number(r.grossProfit) || 0); }, 0);
+  const mapLink = group[0].propertyAddress
+    ? ` <a href="${escapeHtmlAttr(getGoogleMapsUrl(group[0].propertyAddress))}" target="_blank" rel="noopener" class="map-link" title="Googleマップで見る">📍</a>`
+    : '';
   return `<tr class="property-group-row">
     <td colspan="11">
-      <span class="property-group-name">${escapeHtml(group[0].propertyName)}</span>
+      <span class="property-group-name">${escapeHtml(group[0].propertyName)}${mapLink}</span>
       <span class="property-group-meta">表示中${group.length}区画（成約済み${soldCount}／販売中${group.length - soldCount}）・表示区画合計粗利 ${formatMan(totalGrossProfit)}</span>
     </td>
   </tr>`;
@@ -304,8 +308,11 @@ function renderLotRow(r) {
     tags += `<span class="tag tag-price-review">値下げ検討${stageLabel}</span>`;
   }
   if (isSold) tags += `<span class="tag tag-sold">成約済み</span>`;
+  const mapLink = r.propertyAddress
+    ? ` <a href="${escapeHtmlAttr(getGoogleMapsUrl(r.propertyAddress))}" target="_blank" rel="noopener" class="map-link" title="Googleマップで見る">📍</a>`
+    : '';
   return `<tr class="${rowClass}">
-      <td class="property-name-cell">${escapeHtml(r.propertyName || '')}</td>
+      <td class="property-name-cell">${escapeHtml(r.propertyName || '')}${mapLink}</td>
       <td>${escapeHtml(r.lotName || '－')}</td>
       <td>${escapeHtml(r.staff || '')}</td>
       <td>${formatMan(r.startPrice)}</td>
@@ -441,6 +448,7 @@ function openPropertyModal(id) {
     if (!p) return;
     document.getElementById('property-modal-title').textContent = '物件を編集';
     document.getElementById('field-name').value = p.name || '';
+    document.getElementById('field-address').value = p.address || '';
     editingLots = (p.lots || []).map(function (lot) {
       return {
         id: lot.id,
@@ -613,6 +621,7 @@ function closePropertyModal() {
 function onSubmitPropertyForm(e) {
   e.preventDefault();
   const name = document.getElementById('field-name').value.trim();
+  const address = document.getElementById('field-address').value.trim();
   if (!name) {
     showToast('物件名を入力してください');
     return;
@@ -668,7 +677,7 @@ function onSubmitPropertyForm(e) {
     // 旧形式で残っていた物件直下のフィールドは新形式（lots配列）への移行のため削除する
     const del = firebase.firestore.FieldValue.delete();
     db.collection('properties').doc(editingId).update({
-      name, lots: newLots,
+      name, address, lots: newLots,
       staff: del, startPrice: del, currentPrice: del, grossProfit: del,
       settlementDate: del, salesStartDate: del, priceChangeDate: del, history: del,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -681,7 +690,7 @@ function onSubmitPropertyForm(e) {
     }).finally(finish);
   } else {
     db.collection('properties').add({
-      name, lots: newLots,
+      name, address, lots: newLots,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }).then(function () {
       showToast('物件を登録しました');
