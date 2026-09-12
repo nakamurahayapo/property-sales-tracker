@@ -20,8 +20,8 @@ const FIREBASE_CONFIG = {
 // 1. https://cloudinary.com で無料アカウントを作成し、ダッシュボードの Cloud name を確認
 // 2. Settings → Upload → Upload presets で新規presetを作成し、Signing Mode を「Unsigned」にする
 // 3. Cloud name とそのpreset名を以下に設定
-const CLOUDINARY_CLOUD_NAME = 'your-cloud-name';
-const CLOUDINARY_UPLOAD_PRESET = 'your-unsigned-preset';
+const CLOUDINARY_CLOUD_NAME = 'sl2wom6k';
+const CLOUDINARY_UPLOAD_PRESET = 'kaitorischedule_documents';
 
 // ===== 仕入決済予定日アラートの閾値（日数） =====
 // 仕入決済予定日までの残り日数がこの値以下ならゴールド表示（0=当日、マイナス=期限超過は別扱い）
