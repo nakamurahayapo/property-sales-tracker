@@ -418,7 +418,7 @@ function emptyLot() {
   return {
     id: generateId(),
     lotName: '', staff: '', startPrice: '', currentPrice: '', grossProfit: '',
-    settlementDate: '', salesStartDate: '', status: 'active',
+    settlementDate: '', salesStartDate: '', status: 'active', priceChangeDateInput: '',
   };
 }
 
@@ -443,6 +443,7 @@ function openPropertyModal(id) {
         settlementDate: lot.settlementDate || '',
         salesStartDate: lot.salesStartDate || '',
         status: lot.status === 'sold' ? 'sold' : 'active',
+        priceChangeDateInput: '',
       };
     });
     document.getElementById('property-modal-delete-all').hidden = false;
@@ -493,6 +494,13 @@ function renderLotsEditor() {
       </div>
       <div class="form-row">
         <div class="form-group">
+          <label class="form-label">価格変更日</label>
+          <input type="date" class="lot-field" data-field="priceChangeDateInput" data-lot-index="${i}" value="${escapeHtmlAttr(lot.priceChangeDateInput)}">
+          <div class="form-hint">価格を変更する場合の変更日。空欄なら本日の日付になります</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
           <label class="form-label">粗利（万円）</label>
           <input type="number" step="1" class="lot-field" data-field="grossProfit" data-lot-index="${i}" value="${escapeHtmlAttr(lot.grossProfit)}">
         </div>
@@ -536,19 +544,20 @@ function onSubmitPropertyForm(e) {
 
   const newLots = editingLots.map(function (lot) {
     const currentPrice = Number(lot.currentPrice) || 0;
+    const changeDate = (lot.priceChangeDateInput || '').trim() || today;
     const prevLot = prevLotsById[lot.id];
     let history, priceChangeDate;
     if (!prevLot) {
       // 新規区画（新規物件、または編集中に追加された区画）：初回登録として履歴を開始
-      history = [{ date: today, price: currentPrice }];
-      priceChangeDate = today;
+      history = [{ date: changeDate, price: currentPrice }];
+      priceChangeDate = changeDate;
     } else {
       const priceChanged = Number(prevLot.currentPrice) !== currentPrice;
       history = (prevLot.history || []).slice();
       priceChangeDate = prevLot.priceChangeDate || null;
       if (priceChanged) {
-        history.push({ date: today, price: currentPrice });
-        priceChangeDate = today;
+        history.push({ date: changeDate, price: currentPrice });
+        priceChangeDate = changeDate;
       }
     }
     return {
