@@ -16,6 +16,7 @@ let sortDir = 'asc';
 
 let editingId = null;      // 編集中の物件id（null＝新規登録）
 let editingLots = [];      // 編集モーダル内で操作中の区画データ（配列）
+let editingDocuments = []; // 編集モーダル内の販売資料一覧（{name,url,path,size,uploadedAt}）。物件保存後にのみ扱う
 let historyPropertyId = null;
 let historyLotId = null;
 
@@ -410,6 +411,14 @@ function bindModals() {
     if (!editingId) return;
     deleteProperty(editingId);
   });
+  document.getElementById('document-upload-input').addEventListener('change', onDocumentFilesSelected);
+  document.getElementById('documents-list').addEventListener('click', function (e) {
+    const btn = e.target.closest('.document-remove-btn');
+    if (!btn) return;
+    const index = Number(btn.getAttribute('data-doc-index'));
+    if (Number.isNaN(index)) return;
+    removeDocument(index);
+  });
   document.getElementById('history-modal-close').addEventListener('click', closeHistoryModal);
   document.getElementById('history-modal-ok').addEventListener('click', closeHistoryModal);
 }
@@ -447,14 +456,98 @@ function openPropertyModal(id) {
       };
     });
     document.getElementById('property-modal-delete-all').hidden = false;
+    editingDocuments = (p.documents || []).slice();
+    document.getElementById('documents-section').hidden = false;
+    document.getElementById('documents-new-property-hint').hidden = true;
   } else {
     document.getElementById('property-modal-title').textContent = '物件を新規登録';
     editingLots = [emptyLot()];
     document.getElementById('property-modal-delete-all').hidden = true;
+    editingDocuments = [];
+    // 資料のアップロードには保存済みの物件idが必要なため、新規登録時は保存後に表示する
+    document.getElementById('documents-section').hidden = true;
+    document.getElementById('documents-new-property-hint').hidden = false;
   }
 
   renderLotsEditor();
+  renderDocumentsList();
   document.getElementById('property-modal-overlay').hidden = false;
+}
+
+function renderDocumentsList() {
+  const list = document.getElementById('documents-list');
+  if (!editingDocuments.length) {
+    list.innerHTML = '<div class="form-hint">アップロード済みの資料はありません</div>';
+    return;
+  }
+  list.innerHTML = editingDocuments.map(function (doc, i) {
+    return `<div class="document-item">
+      <a href="${escapeHtmlAttr(doc.url)}" target="_blank" rel="noopener" class="document-item-name">${escapeHtml(doc.name)}</a>
+      <button type="button" class="btn btn-danger btn-sm document-remove-btn" data-doc-index="${i}">削除</button>
+    </div>`;
+  }).join('');
+}
+
+// 選択されたファイルを順番にFirebase Storageへアップロードし、完了ごとに物件ドキュメントの
+// documents フィールドを更新する（同時並行にすると保存内容が上書きし合う恐れがあるため直列処理）
+function onDocumentFilesSelected(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (!files.length) return;
+  if (!editingId || !storage) return;
+
+  const hint = document.getElementById('documents-upload-hint');
+  const originalHint = hint.textContent;
+  let hadError = false;
+
+  files.reduce(function (chain, file) {
+    return chain.then(function () {
+      hint.textContent = `アップロード中...（${file.name}）`;
+      const path = `properties/${editingId}/documents/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${file.name}`;
+      return storage.ref(path).put(file)
+        .then(function (snapshot) { return snapshot.ref.getDownloadURL(); })
+        .then(function (url) {
+          editingDocuments.push({ name: file.name, url, path, size: file.size, uploadedAt: getTodayString() });
+          return saveDocumentsToFirestore();
+        })
+        .then(function () { renderDocumentsList(); })
+        .catch(function (err) {
+          console.error('資料アップロードエラー:', err);
+          hadError = true;
+          showToast(`「${file.name}」のアップロードに失敗しました`);
+        });
+    });
+  }, Promise.resolve()).then(function () {
+    hint.textContent = originalHint;
+    if (!hadError) showToast('資料をアップロードしました');
+  });
+}
+
+function saveDocumentsToFirestore() {
+  if (!editingId) return Promise.resolve();
+  return db.collection('properties').doc(editingId).update({
+    documents: editingDocuments,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+function removeDocument(index) {
+  const doc = editingDocuments[index];
+  if (!doc) return;
+  if (!confirm(`「${doc.name}」を削除します。よろしいですか？`)) return;
+  storage.ref(doc.path).delete().catch(function (err) {
+    // Storage側に実体がなくても（既に削除済み等）Firestore側の整合は取る
+    console.warn('資料の削除に失敗（Storage）:', err);
+  }).then(function () {
+    editingDocuments.splice(index, 1);
+    return saveDocumentsToFirestore();
+  }).then(function () {
+    renderDocumentsList();
+    showToast('資料を削除しました');
+  }).catch(function (err) {
+    console.error('資料削除エラー:', err);
+    showToast('削除に失敗しました');
+  });
 }
 
 function renderLotsEditor() {
@@ -523,6 +616,7 @@ function closePropertyModal() {
   document.getElementById('property-modal-overlay').hidden = true;
   editingId = null;
   editingLots = [];
+  editingDocuments = [];
 }
 
 function onSubmitPropertyForm(e) {
@@ -608,12 +702,25 @@ function onSubmitPropertyForm(e) {
   }
 }
 
+// 物件に紐づく販売資料をStorageから削除する（存在しない・失敗しても物件削除自体は続行する）
+function deletePropertyDocumentsFromStorage(p) {
+  const docs = (p && p.documents) || [];
+  if (!storage || !docs.length) return Promise.resolve();
+  return Promise.all(docs.map(function (doc) {
+    return storage.ref(doc.path).delete().catch(function (err) {
+      console.warn('資料の削除に失敗（Storage）:', err);
+    });
+  }));
+}
+
 // 物件を丸ごと削除（全区画）
 function deleteProperty(id) {
   const p = propertiesById[id];
   if (!p) return;
   if (!confirm(`「${p.name}」を区画ごとすべて削除します。よろしいですか？`)) return;
-  db.collection('properties').doc(id).delete().then(function () {
+  deletePropertyDocumentsFromStorage(p).then(function () {
+    return db.collection('properties').doc(id).delete();
+  }).then(function () {
     showToast('物件を削除しました');
     if (editingId === id) closePropertyModal();
   }).catch(function (err) {
@@ -632,7 +739,9 @@ function deleteLot(propertyId, lotId) {
 
   if ((p.lots || []).length <= 1) {
     if (!confirm(`「${label}」を削除します（この物件最後の区画のため物件ごと削除されます）。よろしいですか？`)) return;
-    db.collection('properties').doc(propertyId).delete().then(function () {
+    deletePropertyDocumentsFromStorage(p).then(function () {
+      return db.collection('properties').doc(propertyId).delete();
+    }).then(function () {
       showToast('物件を削除しました');
     }).catch(function (err) {
       console.error('物件削除エラー:', err);

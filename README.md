@@ -54,6 +54,27 @@ service cloud.firestore {
 > ※ このルールはチーム内ツールの想定で、誰でも読み書きできます（現時点ではログイン認証なしの社内アクセス限定運用を想定）。
 > 外部公開する場合や認証を追加する場合はルールを強化してください。
 
+### 4.5. Storage を有効化しセキュリティルールを設定する（販売資料アップロード用）
+
+物件ごとの販売資料（PDF・画像など）は Firebase Storage にアップロードされます。
+
+1. Firebase Console → 左メニュー「Storage」→ まだ有効化していなければ「使ってみる」で有効化
+2. 「Rules」タブで以下に書き換えて「公開」：
+
+```
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /properties/{propertyId}/documents/{fileName} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+> ※ Firestoreと同様、ログイン認証なしの社内アクセス限定運用を想定した開放ルールです。
+> このルールを設定しないと、アプリからのアップロード・削除が権限エラーで失敗します。
+
 ### 5. ローカルで動作確認する
 
 ```bash

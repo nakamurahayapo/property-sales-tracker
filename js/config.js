@@ -39,6 +39,7 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 }
 
 const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
+const storage = typeof firebase !== 'undefined' ? firebase.storage() : null;
 
 // ===== 日付ユーティリティ =====
 

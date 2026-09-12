@@ -114,6 +114,14 @@
             <input type="text" id="field-name" required>
           </div>
 
+          <div class="form-group" id="documents-section" hidden>
+            <label class="form-label">販売資料</label>
+            <div class="document-list" id="documents-list"></div>
+            <input type="file" id="document-upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+            <div class="form-hint" id="documents-upload-hint">物件の販売資料（PDF・画像・Office文書など）をアップロードできます</div>
+          </div>
+          <div class="form-hint" id="documents-new-property-hint" hidden>販売資料は物件の保存後、「編集」から追加できます</div>
+
           <div id="lots-container"></div>
           <button type="button" class="btn btn-secondary" id="add-lot-btn">＋ 区画を追加</button>
         </div>
@@ -154,6 +162,7 @@
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
   <script src="js/config.js"></script>
   <script src="js/main.js"></script>
