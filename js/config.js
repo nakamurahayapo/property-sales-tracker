@@ -16,6 +16,13 @@ const FIREBASE_CONFIG = {
   appId:             "1:860324051540:web:9c9ec839c05f0bb83b4bc1"
 };
 
+// ===== Cloudinary 設定（販売資料アップロード先。Firebase Storageは使わない） =====
+// 1. https://cloudinary.com で無料アカウントを作成し、ダッシュボードの Cloud name を確認
+// 2. Settings → Upload → Upload presets で新規presetを作成し、Signing Mode を「Unsigned」にする
+// 3. Cloud name とそのpreset名を以下に設定
+const CLOUDINARY_CLOUD_NAME = 'your-cloud-name';
+const CLOUDINARY_UPLOAD_PRESET = 'your-unsigned-preset';
+
 // ===== 仕入決済予定日アラートの閾値（日数） =====
 // 仕入決済予定日までの残り日数がこの値以下ならゴールド表示（0=当日、マイナス=期限超過は別扱い）
 const SETTLEMENT_ALERT_DAYS = 7;
@@ -39,7 +46,27 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 }
 
 const db = typeof firebase !== 'undefined' ? firebase.firestore() : null;
-const storage = typeof firebase !== 'undefined' ? firebase.storage() : null;
+
+// ===== ファイルアップロード（Cloudinary・unsigned upload preset） =====
+
+// 複数ファイルをCloudinaryに順番にアップロードし、{name, url, publicId}の配列を返す
+async function uploadFiles(fileList) {
+  const results = [];
+  for (const file of Array.from(fileList)) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`Cloudinaryへのアップロードに失敗しました（${file.name}）`);
+    const data = await res.json();
+    results.push({ name: file.name, url: data.secure_url, publicId: data.public_id });
+  }
+  return results;
+}
 
 // ===== 日付ユーティリティ =====
 

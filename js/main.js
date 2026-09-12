@@ -488,38 +488,31 @@ function renderDocumentsList() {
   }).join('');
 }
 
-// 選択されたファイルを順番にFirebase Storageへアップロードし、完了ごとに物件ドキュメントの
-// documents フィールドを更新する（同時並行にすると保存内容が上書きし合う恐れがあるため直列処理）
+// 選択されたファイルをCloudinaryへアップロードし（uploadFiles は config.js 側で直列アップロード）、
+// 完了後に物件ドキュメントの documents フィールドへまとめて反映する
 function onDocumentFilesSelected(e) {
   const files = Array.from(e.target.files || []);
   e.target.value = '';
   if (!files.length) return;
-  if (!editingId || !storage) return;
+  if (!editingId) return;
 
   const hint = document.getElementById('documents-upload-hint');
   const originalHint = hint.textContent;
-  let hadError = false;
+  hint.textContent = `アップロード中...（${files.length}件）`;
 
-  files.reduce(function (chain, file) {
-    return chain.then(function () {
-      hint.textContent = `アップロード中...（${file.name}）`;
-      const path = `properties/${editingId}/documents/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${file.name}`;
-      return storage.ref(path).put(file)
-        .then(function (snapshot) { return snapshot.ref.getDownloadURL(); })
-        .then(function (url) {
-          editingDocuments.push({ name: file.name, url, path, size: file.size, uploadedAt: getTodayString() });
-          return saveDocumentsToFirestore();
-        })
-        .then(function () { renderDocumentsList(); })
-        .catch(function (err) {
-          console.error('資料アップロードエラー:', err);
-          hadError = true;
-          showToast(`「${file.name}」のアップロードに失敗しました`);
-        });
+  uploadFiles(files).then(function (uploaded) {
+    uploaded.forEach(function (doc) {
+      editingDocuments.push(Object.assign({ uploadedAt: getTodayString() }, doc));
     });
-  }, Promise.resolve()).then(function () {
+    return saveDocumentsToFirestore();
+  }).then(function () {
+    renderDocumentsList();
+    showToast('資料をアップロードしました');
+  }).catch(function (err) {
+    console.error('資料アップロードエラー:', err);
+    showToast(err.message || 'アップロードに失敗しました');
+  }).finally(function () {
     hint.textContent = originalHint;
-    if (!hadError) showToast('資料をアップロードしました');
   });
 }
 
@@ -531,17 +524,15 @@ function saveDocumentsToFirestore() {
   });
 }
 
+// Cloudinary上の実ファイルは削除しない（unsigned presetでは安全に削除できないため）。
+// 一覧・編集画面から見えなくする（Firestore側の参照を外す）のみ。実ファイルを消したい場合は
+// Cloudinaryの管理画面から手動で削除する。
 function removeDocument(index) {
   const doc = editingDocuments[index];
   if (!doc) return;
-  if (!confirm(`「${doc.name}」を削除します。よろしいですか？`)) return;
-  storage.ref(doc.path).delete().catch(function (err) {
-    // Storage側に実体がなくても（既に削除済み等）Firestore側の整合は取る
-    console.warn('資料の削除に失敗（Storage）:', err);
-  }).then(function () {
-    editingDocuments.splice(index, 1);
-    return saveDocumentsToFirestore();
-  }).then(function () {
+  if (!confirm(`「${doc.name}」を一覧から削除します（Cloudinary上のファイル自体は残ります）。よろしいですか？`)) return;
+  editingDocuments.splice(index, 1);
+  saveDocumentsToFirestore().then(function () {
     renderDocumentsList();
     showToast('資料を削除しました');
   }).catch(function (err) {
@@ -702,25 +693,13 @@ function onSubmitPropertyForm(e) {
   }
 }
 
-// 物件に紐づく販売資料をStorageから削除する（存在しない・失敗しても物件削除自体は続行する）
-function deletePropertyDocumentsFromStorage(p) {
-  const docs = (p && p.documents) || [];
-  if (!storage || !docs.length) return Promise.resolve();
-  return Promise.all(docs.map(function (doc) {
-    return storage.ref(doc.path).delete().catch(function (err) {
-      console.warn('資料の削除に失敗（Storage）:', err);
-    });
-  }));
-}
-
 // 物件を丸ごと削除（全区画）
+// ※ Cloudinary上の販売資料は削除されず残る（unsigned upload presetでは安全に削除できないため。README参照）
 function deleteProperty(id) {
   const p = propertiesById[id];
   if (!p) return;
   if (!confirm(`「${p.name}」を区画ごとすべて削除します。よろしいですか？`)) return;
-  deletePropertyDocumentsFromStorage(p).then(function () {
-    return db.collection('properties').doc(id).delete();
-  }).then(function () {
+  db.collection('properties').doc(id).delete().then(function () {
     showToast('物件を削除しました');
     if (editingId === id) closePropertyModal();
   }).catch(function (err) {
@@ -739,9 +718,7 @@ function deleteLot(propertyId, lotId) {
 
   if ((p.lots || []).length <= 1) {
     if (!confirm(`「${label}」を削除します（この物件最後の区画のため物件ごと削除されます）。よろしいですか？`)) return;
-    deletePropertyDocumentsFromStorage(p).then(function () {
-      return db.collection('properties').doc(propertyId).delete();
-    }).then(function () {
+    db.collection('properties').doc(propertyId).delete().then(function () {
       showToast('物件を削除しました');
     }).catch(function (err) {
       console.error('物件削除エラー:', err);
