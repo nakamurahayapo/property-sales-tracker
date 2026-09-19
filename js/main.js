@@ -773,6 +773,15 @@ function toggleLotStatus(propertyId, lotId) {
 
 // ===== 履歴モーダル =====
 
+// 販売開始日が記録されていて、その日付の履歴がまだ無ければ、開始価格の点を補ってグラフの起点にする
+function historyWithSalesStart(lot) {
+  const history = (lot.history || []).slice();
+  if (lot.salesStartDate && !history.some(function (h) { return h.date === lot.salesStartDate; })) {
+    history.push({ date: lot.salesStartDate, price: Number(lot.startPrice) || 0 });
+  }
+  return history;
+}
+
 function openHistoryModal(propertyId, lotId) {
   const p = propertiesById[propertyId];
   if (!p) return;
@@ -783,7 +792,7 @@ function openHistoryModal(propertyId, lotId) {
 
   const displayName = lot.lotName ? `${p.name} / ${lot.lotName}` : p.name;
   document.getElementById('history-modal-title').textContent = `${displayName} の価格推移`;
-  const rows = computeHistoryWithDiff(lot.history);
+  const rows = computeHistoryWithDiff(historyWithSalesStart(lot));
 
   const tbody = document.getElementById('history-table-body');
   if (!rows.length) {
