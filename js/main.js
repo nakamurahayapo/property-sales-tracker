@@ -773,11 +773,12 @@ function toggleLotStatus(propertyId, lotId) {
 
 // ===== 履歴モーダル =====
 
-// 販売開始日が記録されていて、その日付の履歴がまだ無ければ、開始価格の点を補ってグラフの起点にする
+// 販売開始日・開始価格が両方記録されていて、その日付の履歴がまだ無ければ、開始価格の点を補ってグラフの起点にする
 function historyWithSalesStart(lot) {
   const history = (lot.history || []).slice();
-  if (lot.salesStartDate && !history.some(function (h) { return h.date === lot.salesStartDate; })) {
-    history.push({ date: lot.salesStartDate, price: Number(lot.startPrice) || 0 });
+  const startPrice = Number(lot.startPrice) || 0;
+  if (lot.salesStartDate && startPrice > 0 && !history.some(function (h) { return h.date === lot.salesStartDate; })) {
+    history.push({ date: lot.salesStartDate, price: startPrice });
   }
   return history;
 }
