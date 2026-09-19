@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>仕入パイプラインボード</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/shiire.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <h1>🔍 仕入パイプラインボード</h1>
+    <nav class="app-nav">
+      <a href="index.html" class="app-nav-link">📋 販売管理</a>
+      <a href="shiire.html" class="app-nav-link active">🔍 仕入ボード</a>
+    </nav>
+  </header>
+
+  <div class="main-content">
+
+    <!-- サマリー -->
+    <div class="summary-grid summary-grid-3">
+      <div class="stat-tile">
+        <div class="stat-tile-label">表示中の案件</div>
+        <div class="stat-tile-value"><span id="stat-count">0</span><span class="stat-tile-unit">件</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">合計金額</div>
+        <div class="stat-tile-value accent"><span id="stat-amount">0</span><span class="stat-tile-unit">万円</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">決済まで7日以内</div>
+        <div class="stat-tile-value danger"><span id="stat-due-soon">0</span><span class="stat-tile-unit">件</span></div>
+      </div>
+    </div>
+
+    <!-- ツールバー：担当フィルタ・没表示・登録 -->
+    <div class="toolbar">
+      <div class="toolbar-group" id="person-chips">
+        <!-- チップはJSで挿入 -->
+      </div>
+      <label class="check-inline"><input type="checkbox" id="show-dropped"> 没案件も表示</label>
+      <button class="btn btn-accent" id="add-case-btn">＋ 案件を追加</button>
+    </div>
+
+    <!-- レーン（担当ごと・ステージは左から右へ） -->
+    <div class="lanes" id="lanes">
+      <div class="loading"><div class="loading-spinner"></div>読み込み中...</div>
+    </div>
+
+  </div>
+
+  <!-- 登録・編集モーダル -->
+  <div class="modal-overlay" id="case-modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="case-modal-title">案件を追加</h2>
+        <button class="modal-close" id="case-modal-close">×</button>
+      </div>
+      <form id="case-form">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">担当</label>
+              <input type="text" id="field-person" list="person-list" placeholder="例：中村">
+              <datalist id="person-list"></datalist>
+            </div>
+            <div class="form-group">
+              <label class="form-label">ステージ</label>
+              <select id="field-stage">
+                <option value="見当初期">見当初期</option>
+                <option value="買付中">買付中</option>
+                <option value="契約">契約</option>
+                <option value="決済">決済</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">物件名（住所） <span style="color:var(--danger)">*必須</span></label>
+            <input type="text" id="field-name" placeholder="例：川西市西多田" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">目線（万円）</label>
+              <input type="number" id="field-mokusen" placeholder="例：6000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">価格（試算／金額・万円）</label>
+              <input type="number" id="field-price" placeholder="例：6000">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">面積</label>
+              <input type="text" id="field-area" placeholder="例：30坪">
+            </div>
+            <div class="form-group">
+              <label class="form-label">&nbsp;</label>
+              <label class="check-inline"><input type="checkbox" id="field-checked"> 現地確認済み</label>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">契約日</label>
+              <input type="date" id="field-contract-date">
+            </div>
+            <div class="form-group">
+              <label class="form-label">決済予定日</label>
+              <input type="date" id="field-settlement-date">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="check-inline"><input type="checkbox" id="field-dropped"> 没にする</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger" id="case-modal-delete" hidden>この案件を削除</button>
+          <div style="flex:1"></div>
+          <button type="button" class="btn btn-secondary" id="case-modal-cancel">キャンセル</button>
+          <button type="submit" class="btn btn-accent" id="case-modal-submit">保存する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <script src="js/config.js"></script>
+  <script src="js/shiire.js"></script>
+</body>
+</html>
