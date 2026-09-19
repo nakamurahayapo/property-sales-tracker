@@ -124,13 +124,26 @@ function renderChips() {
     wrap.appendChild(chip);
   });
 
-  const datalist = document.getElementById('person-list');
-  datalist.innerHTML = '';
+  renderPersonSelect();
+}
+
+function renderPersonSelect() {
+  const select = document.getElementById('field-person');
+  const current = select.value;
+  select.innerHTML = '';
   allPeople().forEach((p) => {
     const opt = document.createElement('option');
     opt.value = p;
-    datalist.appendChild(opt);
+    opt.textContent = p;
+    select.appendChild(opt);
   });
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__';
+  newOpt.textContent = '＋ 新しい担当者を追加';
+  select.appendChild(newOpt);
+  if (current && [...select.options].some((o) => o.value === current)) {
+    select.value = current;
+  }
 }
 
 function renderLanes() {
@@ -308,7 +321,19 @@ const modalOverlay = document.getElementById('case-modal-overlay');
 function openCaseModal(record) {
   editingId = record ? record.id : null;
   document.getElementById('case-modal-title').textContent = record ? '案件を編集' : '案件を追加';
-  document.getElementById('field-person').value = record ? record.person : (activePerson !== '全員' ? activePerson : '');
+  renderPersonSelect();
+  const personSelect = document.getElementById('field-person');
+  const personNew = document.getElementById('field-person-new');
+  const person = record ? record.person : (activePerson !== '全員' ? activePerson : '');
+  if (person && [...personSelect.options].some((o) => o.value === person)) {
+    personSelect.value = person;
+    personNew.hidden = true;
+    personNew.value = '';
+  } else {
+    personSelect.value = '__new__';
+    personNew.hidden = false;
+    personNew.value = person;
+  }
   document.getElementById('field-stage').value = record ? record.stage : '見当初期';
   document.getElementById('field-name').value = record ? record.name : '';
   document.getElementById('field-mokusen').value = record && record.mokusen != null ? record.mokusen : '';
@@ -326,6 +351,12 @@ function closeCaseModal() {
   modalOverlay.hidden = true;
 }
 
+document.getElementById('field-person').addEventListener('change', (e) => {
+  const personNew = document.getElementById('field-person-new');
+  personNew.hidden = e.target.value !== '__new__';
+  if (!personNew.hidden) personNew.focus();
+});
+
 document.getElementById('add-case-btn').addEventListener('click', () => {
   if (!shiireCol) return;
   openCaseModal(null);
@@ -338,8 +369,12 @@ document.getElementById('case-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const mokusenVal = document.getElementById('field-mokusen').value;
   const priceVal = document.getElementById('field-price').value;
+  const personSelect = document.getElementById('field-person');
+  const personValue = personSelect.value === '__new__'
+    ? document.getElementById('field-person-new').value.trim()
+    : personSelect.value;
   const fields = {
-    person: document.getElementById('field-person').value.trim() || '未設定',
+    person: personValue || '未設定',
     stage: document.getElementById('field-stage').value,
     name: document.getElementById('field-name').value.trim() || '(物件名未入力)',
     mokusen: mokusenVal === '' ? null : Number(mokusenVal),
