@@ -66,19 +66,6 @@
       <button class="btn btn-accent" id="add-property-btn">＋ 新規登録</button>
     </div>
 
-    <!-- 粗利比較グラフ -->
-    <div class="card">
-      <div class="card-header">物件別 粗利比較</div>
-      <div class="card-body">
-        <div class="chart-wrap">
-          <div id="gross-profit-chart-wrap"></div>
-          <div class="empty-state" id="gross-profit-chart-empty" style="display:none">
-            <div class="empty-icon">📊</div>表示できるデータがありません
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 物件一覧テーブル -->
     <div class="card">
       <div class="card-header">物件一覧</div>
@@ -103,6 +90,19 @@
             <tr><td colspan="11"><div class="loading"><div class="loading-spinner"></div>読み込み中...</div></td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- 粗利比較グラフ -->
+    <div class="card">
+      <div class="card-header">物件別 粗利比較</div>
+      <div class="card-body">
+        <div class="chart-wrap">
+          <div id="gross-profit-chart-wrap"></div>
+          <div class="empty-state" id="gross-profit-chart-empty" style="display:none">
+            <div class="empty-icon">📊</div>表示できるデータがありません
+          </div>
+        </div>
       </div>
     </div>
 
