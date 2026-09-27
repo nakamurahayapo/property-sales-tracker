@@ -9,7 +9,7 @@ let properties = [];       // Firestoreから取得した物件一覧（各要�
 let propertiesById = {};   // id -> 物件データ（編集時の差分判定に使用）
 
 let filterStaff = '';      // 担当名フィルタ（空文字＝すべて）
-let filterStatus = 'active'; // 状態フィルタ：'active'（販売中のみ・既定）／'sold'（成約済みのみ）／'all'（すべて）
+let filterStatus = 'all';  // 状態フィルタ：'all'（すべて・既定）／'active'（販売中のみ）／'sold'（成約済みのみ）
 let searchText = '';       // 物件名・区画名検索
 let sortKey = 'settlementDate';
 let sortDir = 'asc';
@@ -212,14 +212,16 @@ function renderSummary(list) {
   // list は区画（lot）単位。「物件数」は区画数と別物なので、区画が属する物件の重複なし件数を数える
   const propertyCount = new Set(list.map(function (r) { return r.propertyId; })).size;
   const lotCount = list.length;
-  const totalGrossProfit = list.reduce(function (sum, r) { return sum + (Number(r.grossProfit) || 0); }, 0);
-  const dueSoonCount = list.filter(function (r) {
+  const activeRows = list.filter(function (r) { return r.status !== 'sold'; });
+  const soldRows = list.filter(function (r) { return r.status === 'sold'; });
+  const dueSoonCount = activeRows.filter(function (r) {
     return getSettlementAlert(r.settlementDate).level === 'warning';
   }).length;
 
   document.getElementById('stat-count').textContent = propertyCount;
   document.getElementById('stat-lot-count').textContent = lotCount;
-  document.getElementById('stat-gross-profit').textContent = totalGrossProfit.toLocaleString('ja-JP');
+  document.getElementById('stat-gross-profit').textContent = sumGrossProfit(activeRows).toLocaleString('ja-JP');
+  document.getElementById('stat-sold-gross-profit').textContent = sumGrossProfit(soldRows).toLocaleString('ja-JP');
   document.getElementById('stat-due-soon').textContent = dueSoonCount;
 }
 
@@ -245,6 +247,10 @@ function renderStaffSummary(list) {
   }).join('');
 }
 
+function sumGrossProfit(list) {
+  return list.reduce(function (sum, r) { return sum + (Number(r.grossProfit) || 0); }, 0);
+}
+
 // 区画の表示名（物件名＋区画名。区画名が空なら物件名のみ）
 function rowDisplayName(r) {
   return r.lotName ? `${r.propertyName} / ${r.lotName}` : r.propertyName;
@@ -259,10 +265,14 @@ function renderTable(list) {
     return;
   }
 
-  // 仕入決済予定日が過ぎた区画を「決済済み」、それ以外（今日以降・未設定）を「未決済」として分けて表示する
-  const unsettled = list.filter(function (r) { return !isSettled(r); });
-  const settled = list.filter(isSettled);
-  tbody.innerHTML = renderSettlementSection('未決済', unsettled) + renderSettlementSection('決済済み', settled);
+  // 販売中の区画は、仕入決済予定日が過ぎたものを「決済済み」、それ以外（今日以降・未設定）を「未決済」に分け、
+  // 成約済みの区画は一番下の「成約済み」欄にまとめる
+  const active = list.filter(function (r) { return r.status !== 'sold'; });
+  const sold = list.filter(function (r) { return r.status === 'sold'; });
+  tbody.innerHTML =
+    renderSettlementSection('未決済', active.filter(function (r) { return !isSettled(r); })) +
+    renderSettlementSection('決済済み', active.filter(isSettled)) +
+    renderSettlementSection('成約済み', sold);
 }
 
 // 仕入決済予定日が今日より前なら決済済みとみなす
@@ -271,7 +281,7 @@ function isSettled(r) {
 }
 
 function renderSettlementSection(title, list) {
-  let html = `<tr class="settlement-section-row"><td colspan="11">■ ${title}（${list.length}件）</td></tr>`;
+  let html = `<tr class="settlement-section-row"><td colspan="11">■ ${title}（${list.length}件）<span class="settlement-section-meta">粗利合計 ${formatMan(sumGrossProfit(list))}</span></td></tr>`;
   if (!list.length) {
     return html + '<tr><td colspan="11" class="settlement-section-empty">該当する区画はありません</td></tr>';
   }

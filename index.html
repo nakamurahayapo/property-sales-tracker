@@ -29,8 +29,12 @@
         <div class="stat-tile-value"><span id="stat-lot-count">0</span><span class="stat-tile-unit">件</span></div>
       </div>
       <div class="stat-tile">
-        <div class="stat-tile-label">合計粗利</div>
+        <div class="stat-tile-label">販売中の粗利</div>
         <div class="stat-tile-value accent"><span id="stat-gross-profit">0</span><span class="stat-tile-unit">万円</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">成約済みの粗利</div>
+        <div class="stat-tile-value accent"><span id="stat-sold-gross-profit">0</span><span class="stat-tile-unit">万円</span></div>
       </div>
       <div class="stat-tile">
         <div class="stat-tile-label">仕入決済まで7日以内</div>
@@ -50,9 +54,9 @@
     <div class="toolbar">
       <div class="toolbar-group">
         <select id="filter-status">
-          <option value="active" selected>状態：販売中</option>
+          <option value="all" selected>状態：すべて</option>
+          <option value="active">状態：販売中</option>
           <option value="sold">状態：成約済み</option>
-          <option value="all">状態：すべて</option>
         </select>
         <select id="filter-staff">
           <option value="">担当：すべて</option>
