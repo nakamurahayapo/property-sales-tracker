@@ -214,8 +214,7 @@ function renderSummary(list) {
   const lotCount = list.length;
   const totalGrossProfit = list.reduce(function (sum, r) { return sum + (Number(r.grossProfit) || 0); }, 0);
   const dueSoonCount = list.filter(function (r) {
-    const alert = getLotSettlementAlert(r);
-    return alert.level === 'warning' || alert.level === 'overdue';
+    return getSettlementAlert(r.settlementDate).level === 'warning';
   }).length;
 
   document.getElementById('stat-count').textContent = propertyCount;
@@ -246,16 +245,6 @@ function renderStaffSummary(list) {
   }).join('');
 }
 
-// 区画の仕入決済予定日アラート。「超過を消す」で消した期限超過は表示・集計しない。
-// 消した時点の仕入決済予定日を overdueDismissedFor に記録しているので、予定日を変更すれば再び判定される
-function getLotSettlementAlert(r) {
-  const alert = getSettlementAlert(r.settlementDate);
-  if (alert.level === 'overdue' && r.overdueDismissedFor && r.overdueDismissedFor === r.settlementDate) {
-    return { level: 'normal', label: '', diffDays: alert.diffDays };
-  }
-  return alert;
-}
-
 // 区画の表示名（物件名＋区画名。区画名が空なら物件名のみ）
 function rowDisplayName(r) {
   return r.lotName ? `${r.propertyName} / ${r.lotName}` : r.propertyName;
@@ -270,10 +259,25 @@ function renderTable(list) {
     return;
   }
 
+  // 仕入決済予定日が過ぎた区画を「決済済み」、それ以外（今日以降・未設定）を「未決済」として分けて表示する
+  const unsettled = list.filter(function (r) { return !isSettled(r); });
+  const settled = list.filter(isSettled);
+  tbody.innerHTML = renderSettlementSection('未決済', unsettled) + renderSettlementSection('決済済み', settled);
+}
+
+// 仕入決済予定日が今日より前なら決済済みとみなす
+function isSettled(r) {
+  return getSettlementAlert(r.settlementDate).level === 'overdue';
+}
+
+function renderSettlementSection(title, list) {
+  let html = `<tr class="settlement-section-row"><td colspan="11">■ ${title}（${list.length}件）</td></tr>`;
+  if (!list.length) {
+    return html + '<tr><td colspan="11" class="settlement-section-empty">該当する区画はありません</td></tr>';
+  }
   // 物件名でソートしているときだけ、同じ物件の区画が並びで隣接するので、
   // 物件ごとの小計行（表示中の区画数・成約内訳・合計粗利）を挟んで見やすくする
   if (sortKey === 'name') {
-    let html = '';
     let i = 0;
     while (i < list.length) {
       const pid = list[i].propertyId;
@@ -282,10 +286,9 @@ function renderTable(list) {
       if (group.length > 1) html += renderPropertyGroupRow(group);
       html += group.map(renderLotRow).join('');
     }
-    tbody.innerHTML = html;
-  } else {
-    tbody.innerHTML = list.map(renderLotRow).join('');
+    return html;
   }
+  return html + list.map(renderLotRow).join('');
 }
 
 // 物件ごとの小計行（同じ物件名でまとまっている区画が2件以上のときだけ表示）
@@ -305,13 +308,10 @@ function renderPropertyGroupRow(group) {
 
 function renderLotRow(r) {
   const isSold = r.status === 'sold';
-  const alert = isSold ? { level: 'normal', label: '' } : getLotSettlementAlert(r);
-  const rowClass = isSold ? 'row-sold' : alert.level === 'overdue' ? 'row-overdue' : alert.level === 'warning' ? 'row-warning' : '';
-  let tags = alert.level === 'overdue'
-    ? `<span class="tag tag-overdue">${alert.label}</span>`
-    : alert.level === 'warning'
-      ? `<span class="tag tag-warning">${alert.label}</span>`
-      : '';
+  // 仕入決済予定日を過ぎた区画は「決済済み」欄に出るので、残り日数（7日以内）のみ強調する
+  const alert = isSold ? { level: 'normal', label: '' } : getSettlementAlert(r.settlementDate);
+  const rowClass = isSold ? 'row-sold' : alert.level === 'warning' ? 'row-warning' : '';
+  let tags = alert.level === 'warning' ? `<span class="tag tag-warning">${alert.label}</span>` : '';
   const reviewStage = isSold ? null : getPriceReviewStageDue(r.settlementDate);
   if (reviewStage) {
     const stageLabel = PRICE_REVIEW_STAGE_LABELS[reviewStage - 1] || `${reviewStage}回目`;
@@ -336,7 +336,6 @@ function renderLotRow(r) {
         <div class="row-actions">
           <button class="btn btn-secondary btn-sm" onclick="openHistoryModal('${r.propertyId}','${r.id}')">履歴</button>
           <button class="btn btn-secondary btn-sm" onclick="openPropertyModal('${r.propertyId}')">編集</button>
-          ${alert.level === 'overdue' ? `<button class="btn btn-secondary btn-sm" onclick="dismissOverdue('${r.propertyId}','${r.id}')">超過を消す</button>` : ''}
           <button class="btn btn-secondary btn-sm" onclick="toggleLotStatus('${r.propertyId}','${r.id}')">${isSold ? '販売中に戻す' : '成約済みにする'}</button>
           <button class="btn btn-danger btn-sm" onclick="deleteLot('${r.propertyId}','${r.id}')">削除</button>
         </div>
@@ -677,7 +676,6 @@ function onSubmitPropertyForm(e) {
       status: lot.status === 'sold' ? 'sold' : 'active',
       history,
       priceChangeDate,
-      overdueDismissedFor: prevLot && prevLot.overdueDismissedFor || null,
     };
   });
 
@@ -779,27 +777,6 @@ function toggleLotStatus(propertyId, lotId) {
     showToast(nextStatus === 'sold' ? '成約済みにしました' : '販売中に戻しました');
   }).catch(function (err) {
     console.error('ステータス更新エラー:', err);
-    showToast('更新に失敗しました');
-  });
-}
-
-// 期限超過の表示を消す（区画に消した時点の仕入決済予定日を記録する）
-function dismissOverdue(propertyId, lotId) {
-  const p = propertiesById[propertyId];
-  if (!p) return;
-  const lot = (p.lots || []).find(function (l) { return l.id === lotId; });
-  if (!lot || !lot.settlementDate) return;
-  if (!confirm('この区画の「期限超過」表示を消しますか？\n（仕入決済予定日を変更すると再び判定されます）')) return;
-  const newLots = p.lots.map(function (l) {
-    return l.id === lotId ? Object.assign({}, l, { overdueDismissedFor: l.settlementDate }) : l;
-  });
-  db.collection('properties').doc(propertyId).update({
-    lots: newLots,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-  }).then(function () {
-    showToast('期限超過の表示を消しました');
-  }).catch(function (err) {
-    console.error('期限超過の非表示エラー:', err);
     showToast('更新に失敗しました');
   });
 }
