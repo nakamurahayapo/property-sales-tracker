@@ -168,7 +168,9 @@ body {
 .chart-wrap { position: relative; }
 
 /* ===== Table ===== */
-.table-scroll { overflow-x: auto; }
+/* 縦スクロールしても見出し行が見えるよう、表自体をスクロール枠にして th を固定する
+   （.card の overflow:hidden と横スクロールがあるため、ページ全体基準の sticky は効かない） */
+.table-scroll { overflow: auto; max-height: calc(100vh - 120px); }
 .property-table {
   width: 100%;
   border-collapse: collapse;
@@ -185,6 +187,10 @@ body {
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: inset 0 -2px 0 var(--border); /* sticky 時に border-collapse の下線が消えるため */
 }
 .property-table th:hover { background: #DCE6EA; }
 .property-table th .sort-arrow { margin-left: 3px; color: var(--accent-dark); font-size: 11px; }
