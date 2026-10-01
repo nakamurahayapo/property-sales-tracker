@@ -222,6 +222,7 @@ function renderSummary(list) {
   document.getElementById('stat-lot-count').textContent = lotCount;
   document.getElementById('stat-gross-profit').textContent = sumGrossProfit(activeRows).toLocaleString('ja-JP');
   document.getElementById('stat-sold-gross-profit').textContent = sumGrossProfit(soldRows).toLocaleString('ja-JP');
+  document.getElementById('stat-sold-count').textContent = soldRows.length;
   document.getElementById('stat-due-soon').textContent = dueSoonCount;
 }
 
