@@ -185,3 +185,10 @@
 .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .icon-btn:disabled:hover { background: var(--card); color: var(--primary); }
 .icon-btn.edit { margin-left: auto; }
+
+/* ===== 没案件（ページ下にまとめて表示） ===== */
+.dropped-card { margin-top: 16px; }
+.dropped-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dropped-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.dropped-table th, .dropped-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.dropped-table th { font-size: 12.5px; color: var(--text-muted); font-weight: 700; }

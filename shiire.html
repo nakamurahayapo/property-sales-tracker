@@ -40,13 +40,30 @@
       <div class="toolbar-group" id="person-chips">
         <!-- チップはJSで挿入 -->
       </div>
-      <label class="check-inline"><input type="checkbox" id="show-dropped"> 没案件も表示</label>
       <button class="btn btn-accent" id="add-case-btn">＋ 案件を追加</button>
     </div>
 
     <!-- レーン（担当ごと・ステージは左から右へ） -->
     <div class="lanes" id="lanes">
       <div class="loading"><div class="loading-spinner"></div>読み込み中...</div>
+    </div>
+
+    <!-- 没案件（ボードからは外し、ここにまとめて表示） -->
+    <div class="card dropped-card">
+      <div class="card-header dropped-card-header">
+        <span>没案件（<span id="dropped-count">0</span>件）</span>
+        <button type="button" class="btn btn-secondary btn-sm" id="toggle-dropped">表示する</button>
+      </div>
+      <div class="card-body" id="dropped-body" hidden>
+        <div class="table-scroll">
+          <table class="dropped-table">
+            <thead>
+              <tr><th>担当</th><th>物件名</th><th>没にした時のステージ</th><th>価格</th><th>操作</th></tr>
+            </thead>
+            <tbody id="dropped-list-body"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
   </div>

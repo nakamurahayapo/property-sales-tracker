@@ -68,8 +68,8 @@ function docToCase(doc) {
 function saveCase(id, fields) {
   const payload = Object.assign({}, fields, { updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
   return shiireCol.doc(id).set(payload)
-    .then(() => showToast('保存しました'))
-    .catch((err) => { console.error(err); showToast('保存に失敗しました'); });
+    .then(() => { showToast('保存しました'); return true; })
+    .catch((err) => { console.error(err); showToast('保存に失敗しました'); return false; });
 }
 
 function deleteCase(id) {
@@ -89,12 +89,18 @@ function allPeople() {
   return out;
 }
 
+// ボード・サマリーに出す案件（没案件は含めない。担当フィルタは適用）
 function visibleCases() {
   return allCases.filter((c) => {
-    if (c.dropped && !showDropped) return false;
+    if (c.dropped) return false;
     if (activePerson !== '全員' && c.person !== activePerson) return false;
     return true;
   });
+}
+
+// ページ下の「没案件」欄に出す案件（担当フィルタは適用）
+function droppedCases() {
+  return allCases.filter((c) => c.dropped && (activePerson === '全員' || c.person === activePerson));
 }
 
 // ===== 描画 =====
@@ -102,6 +108,7 @@ function visibleCases() {
 function render() {
   renderChips();
   renderLanes();
+  renderDropped();
   renderStats();
   document.getElementById('add-case-btn').disabled = !shiireCol;
 }
@@ -303,6 +310,51 @@ function renderCard(c, stage) {
   return card;
 }
 
+function renderDropped() {
+  const recs = droppedCases();
+  document.getElementById('dropped-count').textContent = recs.length;
+  document.getElementById('dropped-body').hidden = !showDropped;
+  document.getElementById('toggle-dropped').textContent = showDropped ? '隠す' : '表示する';
+
+  const tbody = document.getElementById('dropped-list-body');
+  if (!recs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="form-hint">没案件はありません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  recs.forEach((c) => {
+    const tr = document.createElement('tr');
+    const mapLink = c.address
+      ? ` <a href="${escapeHtml(getGoogleMapsUrl(c.address))}" target="_blank" rel="noopener" class="map-link" title="Googleマップで見る">📍</a>`
+      : '';
+    tr.innerHTML = `
+      <td>${escapeHtml(c.person)}</td>
+      <td>${escapeHtml(c.name)}${mapLink}</td>
+      <td>${escapeHtml(c.stage)}</td>
+      <td>${formatMan(c.price)}</td>
+      <td><div class="row-actions"></div></td>`;
+    const actions = tr.querySelector('.row-actions');
+
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.className = 'btn btn-secondary btn-sm';
+    restore.textContent = 'ボードに戻す';
+    restore.disabled = !shiireCol;
+    restore.addEventListener('click', () => saveCase(c.id, fieldsFor(c, { dropped: false })));
+    actions.appendChild(restore);
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'btn btn-secondary btn-sm';
+    edit.textContent = '編集';
+    edit.disabled = !shiireCol;
+    edit.addEventListener('click', () => openCaseModal(c));
+    actions.appendChild(edit);
+
+    tbody.appendChild(tr);
+  });
+}
+
 function fieldsFor(c, overrides) {
   return Object.assign({
     person: c.person, name: c.name, address: c.address, stage: c.stage,
@@ -399,7 +451,13 @@ document.getElementById('case-form').addEventListener('submit', (e) => {
     dropped: document.getElementById('field-dropped').checked,
   };
   const id = editingId || db.collection('shiireCases').doc().id;
-  saveCase(id, fields).then(closeCaseModal);
+  const prev = allCases.find((c) => c.id === editingId);
+  const newlyDropped = fields.dropped && !(prev && prev.dropped);
+  saveCase(id, fields).then((ok) => {
+    closeCaseModal();
+    // 没にした案件はボードから消えるので、どこで見られるかを伝える
+    if (ok && newlyDropped) showToast('没にしました（ページ下の「没案件」で確認できます）');
+  });
 });
 
 document.getElementById('case-modal-delete').addEventListener('click', () => {
@@ -408,9 +466,9 @@ document.getElementById('case-modal-delete').addEventListener('click', () => {
   deleteCase(editingId).then(closeCaseModal);
 });
 
-document.getElementById('show-dropped').addEventListener('change', (e) => {
-  showDropped = e.target.checked;
-  render();
+document.getElementById('toggle-dropped').addEventListener('click', () => {
+  showDropped = !showDropped;
+  renderDropped();
 });
 
 initShiire();
