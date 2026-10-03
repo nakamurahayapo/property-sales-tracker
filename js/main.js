@@ -10,6 +10,7 @@ let propertiesById = {};   // id -> 物件データ（編集時の差分判定�
 
 let filterStaff = '';      // 担当名フィルタ（空文字＝すべて）
 let filterStatus = 'all';  // 状態フィルタ：'all'（すべて・既定）／'active'（販売中のみ）／'sold'（成約済みのみ）
+let filterResale = 'all';  // 売り返しフィルタ：'all'（すべて・既定）／'resale'（売り返し＝他社仲介のみ）／'direct'（自社販売のみ）
 let searchText = '';       // 物件名・区画名検索
 let sortKey = 'settlementDate';
 let sortDir = 'asc';
@@ -109,6 +110,10 @@ function bindToolbar() {
     filterStatus = e.target.value;
     render();
   });
+  document.getElementById('filter-resale').addEventListener('change', function (e) {
+    filterResale = e.target.value;
+    render();
+  });
   document.getElementById('search-name').addEventListener('input', function (e) {
     searchText = e.target.value.trim();
     render();
@@ -138,6 +143,8 @@ function getFilteredRows(rows) {
   return rows.filter(function (r) {
     if (filterStaff && r.staff !== filterStaff) return false;
     if (filterStatus !== 'all' && (r.status || 'active') !== filterStatus) return false;
+    if (filterResale === 'resale' && !r.resale) return false;
+    if (filterResale === 'direct' && r.resale) return false;
     if (needle) {
       const haystack = ((r.propertyName || '') + ' ' + (r.lotName || '')).toLowerCase();
       if (!haystack.includes(needle)) return false;
@@ -329,6 +336,12 @@ function renderLotRow(r) {
     tags += `<span class="tag tag-price-review">値下げ検討${stageLabel}</span>`;
   }
   if (isSold) tags += `<span class="tag tag-sold">成約済み</span>`;
+  if (r.resale) {
+    const company = r.resaleCompany ? `（${escapeHtml(r.resaleCompany)}）` : '';
+    const period = formatResalePeriod(r.resaleStartDate, r.resaleEndDate);
+    tags += `<span class="tag tag-resale" title="他社に売り返し（仲介で販売）">売り返し${company}</span>`;
+    if (period) tags += `<span class="tag-resale-period">${period}</span>`;
+  }
   const mapLink = r.propertyAddress
     ? ` <a href="${escapeHtmlAttr(getGoogleMapsUrl(r.propertyAddress))}" target="_blank" rel="noopener" class="map-link" title="Googleマップで見る">📍</a>`
     : '';
@@ -352,6 +365,12 @@ function renderLotRow(r) {
         </div>
       </td>
     </tr>`;
+}
+
+// 売り返し期間の表示文字列（片方だけ入力されていれば「〜終了日」「開始日〜」）。両方未入力なら空文字
+function formatResalePeriod(startDate, endDate) {
+  if (!startDate && !endDate) return '';
+  return `${startDate ? formatDateJP(startDate) : ''}〜${endDate ? formatDateJP(endDate) : ''}`;
 }
 
 function updateSortArrows() {
@@ -422,7 +441,12 @@ function bindModals() {
     const field = e.target.getAttribute('data-field');
     const index = Number(e.target.getAttribute('data-lot-index'));
     if (field == null || Number.isNaN(index) || !editingLots[index]) return;
-    editingLots[index][field] = e.target.value;
+    editingLots[index][field] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    // 売り返しのON/OFFで仲介会社名の入力欄を出し入れする
+    if (field === 'resale') {
+      const companyGroup = e.target.closest('.lot-fieldset').querySelector('.resale-company-group');
+      if (companyGroup) companyGroup.hidden = !e.target.checked;
+    }
   };
   // input要素は'input'、select要素（ステータス）は'change'で発火するため両方拾う
   document.getElementById('lots-container').addEventListener('input', onLotFieldChange);
@@ -456,6 +480,7 @@ function emptyLot() {
     id: generateId(),
     lotName: '', staff: '', startPrice: '', currentPrice: '', grossProfit: '',
     settlementDate: '', salesStartDate: '', status: 'active', priceChangeDateInput: '',
+    resale: false, resaleCompany: '', resaleStartDate: '', resaleEndDate: '',
   };
 }
 
@@ -482,6 +507,10 @@ function openPropertyModal(id) {
         salesStartDate: lot.salesStartDate || '',
         status: lot.status === 'sold' ? 'sold' : 'active',
         priceChangeDateInput: '',
+        resale: !!lot.resale,
+        resaleCompany: lot.resaleCompany || '',
+        resaleStartDate: lot.resaleStartDate || '',
+        resaleEndDate: lot.resaleEndDate || '',
       };
     });
     document.getElementById('property-modal-delete-all').hidden = false;
@@ -594,6 +623,26 @@ function renderLotsEditor() {
           <option value="sold" ${lot.status === 'sold' ? 'selected' : ''}>成約済み</option>
         </select>
       </div>
+      <div class="form-group">
+        <label class="form-checkbox">
+          <input type="checkbox" class="lot-field" data-field="resale" data-lot-index="${i}" ${lot.resale ? 'checked' : ''}>
+          売り返し（他社に仲介で販売してもらう）
+        </label>
+      </div>
+      <div class="form-group resale-company-group" ${lot.resale ? '' : 'hidden'}>
+        <label class="form-label">売り返し先（仲介会社名）</label>
+        <input type="text" class="lot-field" data-field="resaleCompany" data-lot-index="${i}" value="${escapeHtmlAttr(lot.resaleCompany)}" placeholder="例：〇〇不動産">
+        <div class="form-row" style="margin-top:10px">
+          <div class="form-group">
+            <label class="form-label">売り返し期間（開始）</label>
+            <input type="date" class="lot-field" data-field="resaleStartDate" data-lot-index="${i}" value="${escapeHtmlAttr(lot.resaleStartDate)}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">売り返し期間（終了）</label>
+            <input type="date" class="lot-field" data-field="resaleEndDate" data-lot-index="${i}" value="${escapeHtmlAttr(lot.resaleEndDate)}">
+          </div>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">販売開始価格（万円）</label>
@@ -652,6 +701,14 @@ function onSubmitPropertyForm(e) {
     return;
   }
 
+  const badPeriodIndex = editingLots.findIndex(function (lot) {
+    return lot.resale && lot.resaleStartDate && lot.resaleEndDate && lot.resaleEndDate < lot.resaleStartDate;
+  });
+  if (badPeriodIndex >= 0) {
+    showToast(`区画 ${badPeriodIndex + 1} の売り返し期間は、終了日を開始日以降にしてください`);
+    return;
+  }
+
   const today = getTodayString();
   const prev = editingId ? propertiesById[editingId] : null;
   const prevLotsById = {};
@@ -685,6 +742,10 @@ function onSubmitPropertyForm(e) {
       settlementDate: lot.settlementDate || null,
       salesStartDate: lot.salesStartDate || null,
       status: lot.status === 'sold' ? 'sold' : 'active',
+      resale: !!lot.resale,
+      resaleCompany: lot.resale ? (lot.resaleCompany || '').trim() : '',
+      resaleStartDate: lot.resale ? (lot.resaleStartDate || null) : null,
+      resaleEndDate: lot.resale ? (lot.resaleEndDate || null) : null,
       history,
       priceChangeDate,
     };
