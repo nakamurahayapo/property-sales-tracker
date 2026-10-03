@@ -53,6 +53,7 @@ function docToCase(doc) {
     id: doc.id,
     person: d.person || '未設定',
     name: d.name || '(物件名未入力)',
+    address: d.address || '',
     stage: STAGES.includes(d.stage) ? d.stage : '見当初期',
     mokusen: d.mokusen != null ? Number(d.mokusen) : null,
     price: d.price != null ? Number(d.price) : null,
@@ -223,6 +224,16 @@ function renderCard(c, stage) {
   const name = document.createElement('div');
   name.className = 'case-name';
   name.textContent = c.name;
+  if (c.address) {
+    const mapLink = document.createElement('a');
+    mapLink.href = getGoogleMapsUrl(c.address);
+    mapLink.target = '_blank';
+    mapLink.rel = 'noopener';
+    mapLink.className = 'map-link';
+    mapLink.title = 'Googleマップで見る';
+    mapLink.textContent = '📍';
+    name.appendChild(mapLink);
+  }
   card.appendChild(name);
 
   const figRow = document.createElement('div');
@@ -294,7 +305,7 @@ function renderCard(c, stage) {
 
 function fieldsFor(c, overrides) {
   return Object.assign({
-    person: c.person, name: c.name, stage: c.stage,
+    person: c.person, name: c.name, address: c.address, stage: c.stage,
     mokusen: c.mokusen, price: c.price, area: c.area,
     checked: c.checked, dropped: c.dropped,
     contractDate: c.contractDate, settlementDate: c.settlementDate,
@@ -336,6 +347,7 @@ function openCaseModal(record) {
   }
   document.getElementById('field-stage').value = record ? record.stage : '見当初期';
   document.getElementById('field-name').value = record ? record.name : '';
+  document.getElementById('field-address').value = record ? record.address : '';
   document.getElementById('field-mokusen').value = record && record.mokusen != null ? record.mokusen : '';
   document.getElementById('field-price').value = record && record.price != null ? record.price : '';
   document.getElementById('field-area').value = record ? record.area : '';
@@ -377,6 +389,7 @@ document.getElementById('case-form').addEventListener('submit', (e) => {
     person: personValue || '未設定',
     stage: document.getElementById('field-stage').value,
     name: document.getElementById('field-name').value.trim() || '(物件名未入力)',
+    address: document.getElementById('field-address').value.trim(),
     mokusen: mokusenVal === '' ? null : Number(mokusenVal),
     price: priceVal === '' ? null : Number(priceVal),
     area: document.getElementById('field-area').value.trim(),
