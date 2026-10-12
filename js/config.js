@@ -27,6 +27,20 @@ const CLOUDINARY_UPLOAD_PRESET = 'kaitorischedule_documents';
 // 仕入決済予定日までの残り日数がこの値以下ならゴールド表示（0=当日、マイナス=期限超過は別扱い）
 const SETTLEMENT_ALERT_DAYS = 7;
 
+// ===== 工程表（物件ごと） =====
+// 工程の種類（工程表の入力欄で選択肢として表示する。「その他」を選ぶと自由入力）
+const SCHEDULE_PROCESS_TYPES = ['解体', '測量', '境界確定', '電柱移設', '造成', '上下水道引込', '建築確認', '建築工事', 'その他'];
+
+// 工程表を承認できる上長の名前。承認・差戻し時にこの中から選ぶ
+const SCHEDULE_APPROVERS = ['西谷'];
+
+// 承認・差戻し時に入力する共通パスワードのSHA-256ハッシュ（平文はソースに置かない）
+// 初期パスワードは「shonin1234」。変更する場合はブラウザの開発者ツールのコンソールで
+//   await sha256Hex('新しいパスワード')
+// を実行し、表示された文字列をここに貼り付ける
+// ※ ログイン認証の代わりの簡易な鍵です（担当者本人による誤承認を防ぐ目的）
+const SCHEDULE_APPROVAL_PASSWORD_HASH = '93f644e2919fcdec31e52a2aaaf5a0d116b540cec15f8187f304cdf9f8c73d25';
+
 // ===== ブランドカラー（いえプロ不動産） =====
 // css/style.css 側の CSS変数と対応。JS側では主にグラフ描画で使用する
 const BRAND_COLORS = {
@@ -157,6 +171,40 @@ function getPriceReviewStageDue(settlementDate) {
 
 function isPriceReviewDue(settlementDate) {
   return getPriceReviewStageDue(settlementDate) != null;
+}
+
+// ===== 工程表の状態判定 =====
+// 物件ドキュメントの schedule フィールド：
+//   { tasks: [{ id, type, name, vendor, startDate, endDate, done, note }],
+//     status: 'draft'（未申請）/'pending'（承認待ち）/'approved'（承認済み）/'rejected'（差戻し）,
+//     submittedBy, submittedAt, approvedBy, approvedAt, rejectedBy, rejectedAt, rejectComment,
+//     log: [{ action, by, at, comment }] }
+
+const SCHEDULE_STATUS_LABELS = {
+  draft: '未申請',
+  pending: '承認待ち',
+  approved: '承認済み',
+  rejected: '差戻し',
+};
+
+// 物件の工程表のアラート状態を返す。
+// level: 'missing'（工程未入力）/'rejected'/'pending'/'draft'/'approved'
+// delayedCount: 終了予定日を過ぎても完了になっていない工程の数
+function getScheduleAlert(property) {
+  const schedule = (property && property.schedule) || {};
+  const tasks = Array.isArray(schedule.tasks) ? schedule.tasks : [];
+  const today = getTodayString();
+  const delayedCount = tasks.filter(function (t) { return !t.done && t.endDate && t.endDate < today; }).length;
+  if (!tasks.length) return { level: 'missing', label: '工程未入力', delayedCount: 0 };
+  const status = SCHEDULE_STATUS_LABELS[schedule.status] ? schedule.status : 'draft';
+  const label = status === 'draft' ? '工程 未申請' : `工程 ${SCHEDULE_STATUS_LABELS[status]}`;
+  return { level: status, label, delayedCount };
+}
+
+// 文字列のSHA-256を16進文字列で返す（承認パスワードの照合用）
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
 }
 
 // ===== 金額表示 =====

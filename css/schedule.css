@@ -1,0 +1,163 @@
+/* ============================================================
+   物件工程表（schedule.html）専用スタイル
+   style.css の共通トークン（--primary / --accent 等）に相乗りする。
+   ============================================================ */
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 14px;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.back-link:hover { text-decoration: underline; }
+
+.schedule-property-name { font-size: 20px; font-weight: 800; color: var(--primary); margin-bottom: 6px; }
+.schedule-property-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--text-muted); }
+.schedule-property-meta b { color: var(--text-body); }
+.schedule-property-meta .map-link { color: var(--primary); }
+
+.schedule-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.schedule-card-actions { display: flex; gap: 6px; }
+
+/* ===== 承認状況 ===== */
+.approval-badge {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.approval-badge-missing,
+.approval-badge-rejected { background: var(--danger); color: white; }
+.approval-badge-pending { background: var(--accent); color: white; }
+.approval-badge-draft { background: white; color: var(--primary); border: 1.5px dashed var(--primary); }
+.approval-badge-approved { background: var(--primary); color: white; }
+
+.approval-message {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border-left: 4px solid var(--primary-sub);
+  font-size: 13.5px;
+  margin-bottom: 12px;
+}
+.approval-message-danger { background: var(--danger-bg); border-left-color: var(--danger); color: var(--danger); font-weight: 700; }
+.approval-message-warning { background: var(--accent-bg); border-left-color: var(--accent); }
+.approval-message-ok { background: var(--primary-light); border-left-color: var(--primary); color: var(--primary); font-weight: 700; }
+.approval-message .form-hint { font-weight: 400; }
+.approval-comment { margin-top: 4px; color: var(--text-body); font-weight: 400; }
+
+.approval-submit-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.approval-submit-row input[type="text"] {
+  flex: 0 1 220px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+}
+.approval-submit-row input:focus { outline: none; border-color: var(--primary); }
+
+.form-group input[type="password"],
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--card);
+  color: var(--text-body);
+  font-family: inherit;
+}
+.form-group textarea { resize: vertical; }
+.form-group input[type="password"]:focus,
+.form-group textarea:focus { outline: none; border-color: var(--primary); }
+
+/* ===== ガントチャート ===== */
+.gantt { margin-bottom: 18px; font-size: 12.5px; }
+.gantt-row { display: flex; align-items: stretch; min-height: 30px; }
+.gantt-label {
+  flex: 0 0 170px;
+  padding: 6px 10px 6px 0;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gantt-track {
+  flex: 1;
+  position: relative;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--bg);
+}
+.gantt-head .gantt-track { height: 26px; border-bottom: 2px solid var(--border); }
+.gantt-month {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 5px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-left: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.gantt-bar {
+  position: absolute;
+  top: 7px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--primary);
+}
+.gantt-bar-delayed { background: var(--danger); }
+.gantt-bar-done { background: #A9B6BF; }
+.gantt-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px dashed var(--accent);
+  z-index: 1;
+}
+.gantt-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 11.5px; color: var(--text-muted); }
+.gantt-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.gantt-legend-swatch { display: inline-block; width: 18px; height: 10px; border-radius: 3px; background: var(--primary); }
+.gantt-legend-swatch.gantt-bar-delayed { background: var(--danger); }
+.gantt-legend-swatch.gantt-bar-done { background: #A9B6BF; }
+.gantt-legend-today { display: inline-block; height: 12px; border-left: 2px dashed var(--accent); }
+
+@media (max-width: 720px) {
+  .gantt-label { flex-basis: 96px; font-size: 11.5px; }
+}
+
+/* ===== 工程一覧 ===== */
+.schedule-table-scroll { max-height: none; }
+.schedule-table { min-width: 760px; }
+.schedule-table input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+.schedule-note-cell { white-space: normal; min-width: 140px; color: var(--text-muted); }
+
+/* ===== 工程エディタ ===== */
+.task-editor {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px 0;
+  margin-bottom: 10px;
+}
+.task-editor-bottom { align-items: center; }
+.task-editor-bottom .form-group { flex: 1; }
+.task-editor-bottom .form-checkbox,
+.task-editor-bottom .btn { margin-bottom: 14px; align-self: flex-end; }
+.task-editor-bottom .form-checkbox { padding-bottom: 8px; }
+.task-preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 16px; }
+.task-editor-footer { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px; }
+
+@media (max-width: 720px) {
+  .task-editor .form-row { flex-direction: column; gap: 0; }
+}
+
+.schedule-log-table { margin-top: 0; }

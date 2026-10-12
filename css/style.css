@@ -447,3 +447,37 @@ body {
     font-size: 16px;
   }
 }
+
+/* ===== 工程表（一覧側：物件名リンク・状態タグ・アラート） ===== */
+.property-name-link { color: var(--primary); text-decoration: none; border-bottom: 1px dashed var(--primary-sub); }
+.property-name-link:hover { color: var(--accent-dark); border-bottom-color: var(--accent-dark); }
+a.tag { text-decoration: none; }
+.tag-schedule-missing,
+.tag-schedule-rejected,
+.tag-schedule-delayed { background: var(--danger); color: white; }
+.tag-schedule-pending { background: var(--accent); color: white; }
+.tag-schedule-draft { background: white; color: var(--primary); border: 1.5px dashed var(--primary); }
+
+.schedule-alert {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.schedule-alert[hidden] { display: none; }
+.schedule-alert-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  padding: 10px 16px;
+  border-left: 5px solid var(--danger);
+  background: var(--danger-bg);
+}
+.schedule-alert-row + .schedule-alert-row { border-top: 1px solid var(--card); }
+.schedule-alert-row.schedule-alert-warning { border-left-color: var(--accent); background: var(--accent-bg); }
+.schedule-alert-title { font-size: 13px; font-weight: 800; color: var(--danger); white-space: nowrap; }
+.schedule-alert-warning .schedule-alert-title { color: var(--accent-dark); }
+.schedule-alert-links { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
+.schedule-alert-links a { color: var(--primary); font-weight: 700; }

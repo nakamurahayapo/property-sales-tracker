@@ -93,6 +93,7 @@ function flattenLots() {
         propertyName: p.name || '',
         propertyAddress: p.address || '',
         isOnlyLot: (p.lots || []).length <= 1,
+        scheduleAlert: getScheduleAlert(p),
       }));
     });
   });
@@ -208,6 +209,7 @@ function render() {
   const filtered = getFilteredRows(allRows);
   const sorted = getSortedRows(filtered);
 
+  renderScheduleAlertBanner();
   renderSummary(filtered);
   renderStaffSummary(filtered);
   renderGrossProfitChart(filtered);
@@ -318,7 +320,7 @@ function renderPropertyGroupRow(group) {
     : '';
   return `<tr class="property-group-row">
     <td colspan="11">
-      <span class="property-group-name">${escapeHtml(group[0].propertyName)}${mapLink}</span>
+      <span class="property-group-name"><a href="${scheduleUrl(group[0].propertyId)}" class="property-name-link" title="工程表を見る">${escapeHtml(group[0].propertyName)}</a>${mapLink}</span>
       <span class="property-group-meta">表示中${group.length}区画（成約済み${soldCount}／販売中${group.length - soldCount}）・表示区画合計粗利 ${formatMan(totalGrossProfit)}</span>
     </td>
   </tr>`;
@@ -336,6 +338,7 @@ function renderLotRow(r) {
     tags += `<span class="tag tag-price-review">値下げ検討${stageLabel}</span>`;
   }
   if (isSold) tags += `<span class="tag tag-sold">成約済み</span>`;
+  if (!isSold) tags += renderScheduleTags(r);
   if (r.resale) {
     const company = r.resaleCompany ? `（${escapeHtml(r.resaleCompany)}）` : '';
     const period = formatResalePeriod(r.resaleStartDate, r.resaleEndDate);
@@ -346,7 +349,7 @@ function renderLotRow(r) {
     ? ` <a href="${escapeHtmlAttr(getGoogleMapsUrl(r.propertyAddress))}" target="_blank" rel="noopener" class="map-link" title="Googleマップで見る">📍</a>`
     : '';
   return `<tr class="${rowClass}">
-      <td class="property-name-cell">${escapeHtml(r.propertyName || '')}${mapLink}</td>
+      <td class="property-name-cell"><a href="${scheduleUrl(r.propertyId)}" class="property-name-link" title="工程表を見る">${escapeHtml(r.propertyName || '')}</a>${mapLink}</td>
       <td>${escapeHtml(r.lotName || '－')}</td>
       <td>${escapeHtml(r.staff || '')}</td>
       <td>${formatMan(r.startPrice)}</td>
@@ -365,6 +368,64 @@ function renderLotRow(r) {
         </div>
       </td>
     </tr>`;
+}
+
+// ===== 工程表（物件名クリックで schedule.html へ） =====
+
+function scheduleUrl(propertyId) {
+  return `schedule.html?id=${encodeURIComponent(propertyId)}`;
+}
+
+// 状態欄に出す工程表のタグ（承認済みかつ遅延なしなら何も出さない）
+function renderScheduleTags(r) {
+  const alert = r.scheduleAlert;
+  if (!alert) return '';
+  let html = '';
+  if (alert.level !== 'approved') {
+    html += `<a href="${scheduleUrl(r.propertyId)}" class="tag tag-schedule tag-schedule-${alert.level}">${alert.label}</a>`;
+  }
+  if (alert.delayedCount) {
+    html += `<a href="${scheduleUrl(r.propertyId)}" class="tag tag-schedule tag-schedule-delayed">工程遅延${alert.delayedCount}件</a>`;
+  }
+  return html;
+}
+
+// 一覧上部のアラート：販売中の区画が1つでもある物件のうち、工程未入力・差戻し・承認待ち・遅延のものを列挙する
+// （フィルタ・検索とは連動させず、常に全物件を対象にする）
+function renderScheduleAlertBanner() {
+  const wrap = document.getElementById('schedule-alert');
+  const groups = { missing: [], rejected: [], pending: [], delayed: [] };
+  properties.forEach(function (p) {
+    const hasActiveLot = (p.lots || []).some(function (lot) { return lot.status !== 'sold'; });
+    if (!hasActiveLot) return;
+    const alert = getScheduleAlert(p);
+    if (groups[alert.level]) groups[alert.level].push(p);
+    if (alert.delayedCount) groups.delayed.push(p);
+  });
+  const sections = [
+    { key: 'missing', title: '工程が未入力の物件', cls: 'danger' },
+    { key: 'rejected', title: '工程表が差戻しされた物件', cls: 'danger' },
+    { key: 'delayed', title: '予定を過ぎて未完了の工程がある物件', cls: 'danger' },
+    { key: 'pending', title: '上長の承認待ちの物件', cls: 'warning' },
+  ].filter(function (s) { return groups[s.key].length; });
+
+  if (!sections.length) {
+    wrap.hidden = true;
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.hidden = false;
+  wrap.innerHTML = sections.map(function (s) {
+    const links = groups[s.key]
+      .slice()
+      .sort(function (a, b) { return (a.name || '').localeCompare(b.name || '', 'ja'); })
+      .map(function (p) { return `<a href="${scheduleUrl(p.id)}">${escapeHtml(p.name || '(物件名なし)')}</a>`; })
+      .join('');
+    return `<div class="schedule-alert-row schedule-alert-${s.cls}">
+      <span class="schedule-alert-title">⚠ ${s.title}（${groups[s.key].length}件）</span>
+      <span class="schedule-alert-links">${links}</span>
+    </div>`;
+  }).join('');
 }
 
 // 売り返し期間の表示文字列（片方だけ入力されていれば「〜終了日」「開始日〜」）。両方未入力なら空文字
