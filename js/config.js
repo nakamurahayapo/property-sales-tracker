@@ -35,11 +35,11 @@ const SCHEDULE_PROCESS_TYPES = ['解体', '測量', '境界確定', '電柱移�
 const SCHEDULE_APPROVERS = ['西谷'];
 
 // 承認・差戻し時に入力する共通パスワードのSHA-256ハッシュ（平文はソースに置かない）
-// 初期パスワードは「shonin1234」。変更する場合はブラウザの開発者ツールのコンソールで
+// 変更する場合はブラウザの開発者ツールのコンソールで
 //   await sha256Hex('新しいパスワード')
 // を実行し、表示された文字列をここに貼り付ける
 // ※ ログイン認証の代わりの簡易な鍵です（担当者本人による誤承認を防ぐ目的）
-const SCHEDULE_APPROVAL_PASSWORD_HASH = '93f644e2919fcdec31e52a2aaaf5a0d116b540cec15f8187f304cdf9f8c73d25';
+const SCHEDULE_APPROVAL_PASSWORD_HASH = '9d970a1ce7cc06cd49ffc3aeba81b0411de1cc7b687cf2f6ab2381021dc4e51b';
 
 // ===== ブランドカラー（いえプロ不動産） =====
 // css/style.css 側の CSS変数と対応。JS側では主にグラフ描画で使用する
