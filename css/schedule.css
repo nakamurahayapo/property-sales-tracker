@@ -114,6 +114,7 @@
   background: var(--primary);
 }
 .gantt-bar-delayed { background: var(--danger); }
+.gantt-bar-due-today { background: var(--accent); }
 .gantt-bar-done { background: #A9B6BF; }
 .gantt-today {
   position: absolute;
@@ -127,6 +128,7 @@
 .gantt-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .gantt-legend-swatch { display: inline-block; width: 18px; height: 10px; border-radius: 3px; background: var(--primary); }
 .gantt-legend-swatch.gantt-bar-delayed { background: var(--danger); }
+.gantt-legend-swatch.gantt-bar-due-today { background: var(--accent); }
 .gantt-legend-swatch.gantt-bar-done { background: #A9B6BF; }
 .gantt-legend-today { display: inline-block; height: 12px; border-left: 2px dashed var(--accent); }
 

@@ -190,12 +190,13 @@ const SCHEDULE_STATUS_LABELS = {
 
 // 物件の工程表のアラート状態を返す。
 // level: 'missing'（工程未入力）/'rejected'/'pending'/'draft'/'approved'/'notRequired'（工程不要・承認済み）
-// delayedCount: 終了予定日を過ぎても完了になっていない工程の数
+// delayedCount: 終了予定日を過ぎても完了になっていない工程の数／dueTodayCount: 今日が終了予定日で未完了の工程の数
 function getScheduleAlert(property) {
   const schedule = (property && property.schedule) || {};
   const tasks = Array.isArray(schedule.tasks) ? schedule.tasks : [];
   const today = getTodayString();
   const delayedCount = tasks.filter(function (t) { return !t.done && t.endDate && t.endDate < today; }).length;
+  const dueTodayCount = tasks.filter(function (t) { return !t.done && t.endDate === today; }).length;
   const status = SCHEDULE_STATUS_LABELS[schedule.status] ? schedule.status : 'draft';
   // 工事なしで販売する物件など、工程表そのものが不要な物件（上長承認済みならアラート対象外）
   if (schedule.notRequired && !tasks.length) {
@@ -205,7 +206,7 @@ function getScheduleAlert(property) {
   }
   if (!tasks.length) return { level: 'missing', label: '工程未入力', delayedCount: 0 };
   const label = status === 'draft' ? '工程 未申請' : `工程 ${SCHEDULE_STATUS_LABELS[status]}`;
-  return { level: status, label, delayedCount };
+  return { level: status, label, delayedCount, dueTodayCount };
 }
 
 // 文字列のSHA-256を16進文字列で返す（承認パスワードの照合用）

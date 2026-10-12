@@ -263,6 +263,11 @@ function isTaskDelayed(t) {
   return !t.done && t.endDate && t.endDate < getTodayString();
 }
 
+// 今日が終了予定日で、まだ完了になっていない工程
+function isTaskDueToday(t) {
+  return !t.done && t.endDate === getTodayString();
+}
+
 function renderScheduleView() {
   const tasks = sortTasks(getSchedule().tasks);
   document.getElementById('schedule-actions').innerHTML =
@@ -277,7 +282,12 @@ function renderScheduleView() {
       <span class="form-hint">解体・測量・電柱移設・造成などの予定を登録してください</span></div>`;
     return;
   }
-  wrap.innerHTML = renderGantt(tasks) + `
+  const dueToday = tasks.filter(isTaskDueToday);
+  const dueTodayNotice = dueToday.length
+    ? `<div class="approval-message approval-message-warning">⏰ 本日が完了予定日の工程があります：<b>${dueToday.map(function (t) { return escapeHtml(taskLabel(t)); }).join('、')}</b>
+        <div class="form-hint">完了したら下の一覧の「完了」にチェックしてください。終わらない場合は「工程を編集」で予定日を見直してください。</div></div>`
+    : '';
+  wrap.innerHTML = dueTodayNotice + renderGantt(tasks) + `
     <div class="table-scroll schedule-table-scroll">
       <table class="property-table schedule-table">
         <thead><tr>
@@ -286,10 +296,12 @@ function renderScheduleView() {
         </tr></thead>
         <tbody>${tasks.map(function (t) {
           const delayed = isTaskDelayed(t);
+          const dueTodayTask = isTaskDueToday(t);
           const state = t.done
             ? '<span class="tag tag-sold">完了</span>'
-            : delayed ? '<span class="tag tag-overdue">遅延</span>' : '';
-          return `<tr class="${t.done ? 'row-sold' : delayed ? 'row-overdue' : ''}">
+            : delayed ? '<span class="tag tag-overdue">遅延</span>'
+              : dueTodayTask ? '<span class="tag tag-warning">本日完了予定</span>' : '';
+          return `<tr class="${t.done ? 'row-sold' : delayed ? 'row-overdue' : dueTodayTask ? 'row-warning' : ''}">
             <td><input type="checkbox" class="task-done-toggle" data-task-id="${escapeHtml(t.id)}" ${t.done ? 'checked' : ''} title="完了にする"></td>
             <td class="property-name-cell">${escapeHtml(taskLabel(t))}</td>
             <td>${escapeHtml(t.vendor || '－')}</td>
@@ -336,7 +348,7 @@ function renderGantt(tasks) {
     const s = parseDateOnly(t.startDate || t.endDate);
     const e = parseDateOnly(t.endDate || t.startDate);
     const endExclusive = new Date(e.getFullYear(), e.getMonth(), e.getDate() + 1);
-    const cls = t.done ? 'gantt-bar-done' : isTaskDelayed(t) ? 'gantt-bar-delayed' : '';
+    const cls = t.done ? 'gantt-bar-done' : isTaskDelayed(t) ? 'gantt-bar-delayed' : isTaskDueToday(t) ? 'gantt-bar-due-today' : '';
     const period = `${formatDateJP(t.startDate)}〜${formatDateJP(t.endDate)}`;
     return `<div class="gantt-row">
       <div class="gantt-label" title="${escapeHtml(taskLabel(t))}">${escapeHtml(taskLabel(t))}</div>
@@ -355,6 +367,7 @@ function renderGantt(tasks) {
     ${rows}
     <div class="gantt-legend">
       <span><i class="gantt-legend-swatch"></i>予定</span>
+      <span><i class="gantt-legend-swatch gantt-bar-due-today"></i>本日完了予定</span>
       <span><i class="gantt-legend-swatch gantt-bar-delayed"></i>遅延</span>
       <span><i class="gantt-legend-swatch gantt-bar-done"></i>完了</span>
       <span><i class="gantt-legend-today"></i>今日</span>

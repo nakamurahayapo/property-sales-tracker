@@ -387,25 +387,30 @@ function renderScheduleTags(r) {
   if (alert.delayedCount) {
     html += `<a href="${scheduleUrl(r.propertyId)}" class="tag tag-schedule tag-schedule-delayed">工程遅延${alert.delayedCount}件</a>`;
   }
+  if (alert.dueTodayCount) {
+    html += `<a href="${scheduleUrl(r.propertyId)}" class="tag tag-schedule tag-schedule-due-today" title="完了したら工程表で「完了」にチェックしてください">本日完了予定${alert.dueTodayCount}件</a>`;
+  }
   return html;
 }
 
-// 一覧上部のアラート：販売中の区画が1つでもある物件のうち、工程未入力・差戻し・承認待ち・遅延のものを列挙する
+// 一覧上部のアラート：販売中の区画が1つでもある物件のうち、工程未入力・差戻し・承認待ち・遅延・本日完了予定のものを列挙する
 // （フィルタ・検索とは連動させず、常に全物件を対象にする）
 function renderScheduleAlertBanner() {
   const wrap = document.getElementById('schedule-alert');
-  const groups = { missing: [], rejected: [], pending: [], delayed: [] };
+  const groups = { missing: [], rejected: [], pending: [], delayed: [], dueToday: [] };
   properties.forEach(function (p) {
     const hasActiveLot = (p.lots || []).some(function (lot) { return lot.status !== 'sold'; });
     if (!hasActiveLot) return;
     const alert = getScheduleAlert(p);
     if (groups[alert.level]) groups[alert.level].push(p);
     if (alert.delayedCount) groups.delayed.push(p);
+    if (alert.dueTodayCount) groups.dueToday.push(p);
   });
   const sections = [
     { key: 'missing', title: '工程が未入力の物件', cls: 'danger' },
     { key: 'rejected', title: '工程表が差戻しされた物件', cls: 'danger' },
     { key: 'delayed', title: '予定を過ぎて未完了の工程がある物件', cls: 'danger' },
+    { key: 'dueToday', title: '本日が完了予定日の工程がある物件（完了したらチェックを）', cls: 'warning' },
     { key: 'pending', title: '上長の承認待ちの物件', cls: 'warning' },
   ].filter(function (s) { return groups[s.key].length; });
 

@@ -455,7 +455,8 @@ a.tag { text-decoration: none; }
 .tag-schedule-missing,
 .tag-schedule-rejected,
 .tag-schedule-delayed { background: var(--danger); color: white; }
-.tag-schedule-pending { background: var(--accent); color: white; }
+.tag-schedule-pending,
+.tag-schedule-due-today { background: var(--accent); color: white; }
 .tag-schedule-draft { background: white; color: var(--primary); border: 1.5px dashed var(--primary); }
 
 .schedule-alert {
