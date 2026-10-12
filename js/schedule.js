@@ -55,6 +55,8 @@ function getSchedule() {
     rejectedBy: s.rejectedBy || '',
     rejectedAt: s.rejectedAt || '',
     rejectComment: s.rejectComment || '',
+    notRequired: !!s.notRequired,
+    notRequiredReason: s.notRequiredReason || '',
     log: Array.isArray(s.log) ? s.log : [],
   };
 }
@@ -123,41 +125,68 @@ function renderApproval() {
   const s = getSchedule();
   const wrap = document.getElementById('sec-approval');
   const hasTasks = s.tasks.length > 0;
+  const notRequired = s.notRequired && !hasTasks;
+  const reasonHtml = notRequired && s.notRequiredReason
+    ? `<div class="approval-comment">理由：${escapeHtml(s.notRequiredReason)}</div>` : '';
+  const applicantInput = `<input type="text" id="submit-applicant" list="applicant-options" placeholder="申請者（担当）名" value="${escapeHtml(defaultApplicant())}">
+      <datalist id="applicant-options">${staffOptions().map(function (n) { return `<option value="${escapeHtml(n)}">`; }).join('')}</datalist>`;
   let body = '';
 
-  if (!hasTasks) {
-    body = `<div class="approval-message approval-message-danger">⚠ 工程が入力されていません。「工程を編集」から工程を登録し、上長に承認申請してください。</div>`;
-  } else if (s.status === 'draft' || s.status === 'rejected') {
-    if (s.status === 'rejected') {
-      body += `<div class="approval-message approval-message-danger">
-        差戻し（${escapeHtml(s.rejectedBy)}・${escapeHtml(s.rejectedAt)}）${s.rejectComment ? `<div class="approval-comment">「${escapeHtml(s.rejectComment)}」</div>` : ''}
-        <div class="form-hint">内容を修正して再度申請してください。</div>
-      </div>`;
-    } else {
-      body += `<div class="approval-message">工程を入力したら、上長に承認申請してください。</div>`;
-    }
-    body += `<div class="approval-submit-row">
-      <input type="text" id="submit-applicant" list="applicant-options" placeholder="申請者（担当）名" value="${escapeHtml(defaultApplicant())}">
-      <datalist id="applicant-options">${staffOptions().map(function (n) { return `<option value="${escapeHtml(n)}">`; }).join('')}</datalist>
-      <button type="button" class="btn btn-accent" id="submit-approval-btn">上長に承認申請する</button>
-    </div>`;
-  } else if (s.status === 'pending') {
+  if (s.status === 'pending' && (hasTasks || notRequired)) {
     body = `<div class="approval-message approval-message-warning">
-      ${escapeHtml(s.submittedBy)} さんが ${escapeHtml(s.submittedAt)} に承認申請しました。上長の承認待ちです。
+      ${escapeHtml(s.submittedBy)} さんが ${escapeHtml(s.submittedAt)} に${notRequired ? '<b>工程不要</b>として' : ''}承認申請しました。上長の承認待ちです。
+      ${reasonHtml}
     </div>
     <div class="approval-submit-row">
       <button type="button" class="btn btn-accent" id="approve-btn">承認する（上長）</button>
       <button type="button" class="btn btn-danger" id="reject-btn">差戻す（上長）</button>
     </div>`;
-  } else if (s.status === 'approved') {
+  } else if (s.status === 'approved' && notRequired) {
+    body = `<div class="approval-message approval-message-ok">
+      ✔ 工程不要として ${escapeHtml(s.approvedBy)} さんが ${escapeHtml(s.approvedAt)} に承認しました（申請：${escapeHtml(s.submittedBy)}）
+      ${reasonHtml}
+      <div class="form-hint">工事が必要になった場合は「工程を編集」から工程を登録し、改めて承認申請してください。</div>
+    </div>
+    <div class="approval-submit-row">
+      <button type="button" class="btn btn-secondary btn-sm" id="cancel-not-required-btn">工程不要を取り消す</button>
+    </div>`;
+  } else if (s.status === 'approved' && hasTasks) {
     body = `<div class="approval-message approval-message-ok">
       ✔ ${escapeHtml(s.approvedBy)} さんが ${escapeHtml(s.approvedAt)} に承認しました（申請：${escapeHtml(s.submittedBy)}）
       <div class="form-hint">工程を修正すると承認が取り消され、再申請が必要になります（完了チェックは承認のままで更新できます）。</div>
     </div>`;
+  } else {
+    // 未申請・差戻し：工程があれば承認申請、なければ工程入力を促しつつ「工程不要」の申請も受け付ける
+    if (s.status === 'rejected') {
+      body += `<div class="approval-message approval-message-danger">
+        ${notRequired ? '工程不要の申請が' : ''}差戻されました（${escapeHtml(s.rejectedBy)}・${escapeHtml(s.rejectedAt)}）${s.rejectComment ? `<div class="approval-comment">「${escapeHtml(s.rejectComment)}」</div>` : ''}
+        <div class="form-hint">${notRequired ? '工程を登録して申請するか、理由を見直して再度申請してください。' : '内容を修正して再度申請してください。'}</div>
+      </div>`;
+    }
+    if (hasTasks) {
+      if (s.status !== 'rejected') body += `<div class="approval-message">工程を入力したら、上長に承認申請してください。</div>`;
+      body += `<div class="approval-submit-row">
+        ${applicantInput}
+        <button type="button" class="btn btn-accent" id="submit-approval-btn">上長に承認申請する</button>
+      </div>`;
+    } else {
+      if (s.status !== 'rejected') {
+        body += `<div class="approval-message approval-message-danger">⚠ 工程が入力されていません。「工程を編集」から工程を登録し、上長に承認申請してください。</div>`;
+      }
+      body += `<div class="not-required-box">
+        <div class="not-required-title">工程表が不要な物件の場合（工事なしでそのまま販売する等）</div>
+        <div class="approval-submit-row">
+          <input type="text" id="not-required-reason" class="not-required-reason" placeholder="不要な理由（例：現況渡しで工事なし）" value="${escapeHtml(s.notRequiredReason)}">
+          ${applicantInput}
+          <button type="button" class="btn btn-secondary" id="submit-not-required-btn">工程不要として承認申請する</button>
+        </div>
+      </div>`;
+    }
   }
 
-  const badgeLevel = hasTasks ? s.status : 'missing';
-  const badgeLabel = hasTasks ? SCHEDULE_STATUS_LABELS[s.status] : '工程未入力';
+  const alert = getScheduleAlert(property);
+  const badgeLevel = alert.level;
+  const badgeLabel = alert.level === 'missing' || alert.level === 'notRequired' || notRequired ? alert.label : SCHEDULE_STATUS_LABELS[s.status];
   wrap.innerHTML = `
     <div class="card-header schedule-card-header">
       <span>承認状況</span>
@@ -171,6 +200,10 @@ function renderApproval() {
   if (approveBtn) approveBtn.addEventListener('click', function () { openApprovalModal('approve'); });
   const rejectBtn = document.getElementById('reject-btn');
   if (rejectBtn) rejectBtn.addEventListener('click', function () { openApprovalModal('reject'); });
+  const notRequiredBtn = document.getElementById('submit-not-required-btn');
+  if (notRequiredBtn) notRequiredBtn.addEventListener('click', submitNotRequired);
+  const cancelNotRequiredBtn = document.getElementById('cancel-not-required-btn');
+  if (cancelNotRequiredBtn) cancelNotRequiredBtn.addEventListener('click', cancelNotRequired);
 }
 
 function staffOptions() {
@@ -187,6 +220,8 @@ const LOG_ACTION_LABELS = {
   approve: '承認',
   reject: '差戻し',
   edit: '工程を修正（承認取消）',
+  submitNotRequired: '工程不要として申請',
+  cancelNotRequired: '工程不要を取消',
 };
 
 function renderLog() {
@@ -233,6 +268,10 @@ function renderScheduleView() {
   document.getElementById('schedule-actions').innerHTML =
     '<button type="button" class="btn btn-secondary btn-sm" id="edit-schedule-btn">工程を編集</button>';
   const wrap = document.getElementById('sec-schedule');
+  if (!tasks.length && getScheduleAlert(property).level === 'notRequired') {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">✔</div>この物件は工程不要として承認されています</div>`;
+    return;
+  }
   if (!tasks.length) {
     wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🗓</div>工程が入力されていません<br>
       <span class="form-hint">解体・測量・電柱移設・造成などの予定を登録してください</span></div>`;
@@ -380,7 +419,9 @@ function renderEditor() {
   const s = getSchedule();
   const warn = (s.status === 'approved' || s.status === 'pending') && s.tasks.length
     ? `<div class="approval-message approval-message-warning">現在「${SCHEDULE_STATUS_LABELS[s.status]}」です。保存すると承認が取り消され「未申請」に戻ります（再申請が必要）。</div>`
-    : '';
+    : s.notRequired
+      ? '<div class="approval-message approval-message-warning">工程を登録して保存すると「工程不要」は取り消され、通常の工程表として承認申請が必要になります。</div>'
+      : '';
   const presets = SCHEDULE_PROCESS_TYPES.filter(function (t) { return t !== 'その他'; }).map(function (t) {
     return `<button type="button" class="btn btn-secondary btn-sm add-preset-btn" data-type="${escapeHtml(t)}">＋${escapeHtml(t)}</button>`;
   }).join('');
@@ -475,7 +516,18 @@ function saveEditedTasks() {
     next.approvedAt = '';
     next.log = s.log.concat([{ action: 'edit', by: '', at: nowString(), comment: '' }]);
   }
-  if (!tasks.length) next.status = 'draft';
+  // 工程不要（申請中・承認済み・差戻し）だった物件に工程を登録したら、通常の工程表として申請し直してもらう
+  if (s.notRequired && tasks.length) {
+    next.notRequired = false;
+    next.notRequiredReason = '';
+    next.status = 'draft';
+    next.approvedBy = '';
+    next.approvedAt = '';
+    if (s.status === 'approved' || s.status === 'pending') {
+      next.log = s.log.concat([{ action: 'cancelNotRequired', by: '', at: nowString(), comment: '工程を登録' }]);
+    }
+  }
+  if (!tasks.length && !s.notRequired) next.status = 'draft';
 
   document.getElementById('save-schedule-btn').disabled = true;
   saveSchedule(next, '工程を保存しました').then(function (ok) {
@@ -511,10 +563,47 @@ function submitForApproval() {
   const at = nowString();
   saveSchedule(Object.assign({}, s, {
     status: 'pending',
+    notRequired: false,
+    notRequiredReason: '',
     submittedBy: applicant,
     submittedAt: at,
     log: s.log.concat([{ action: 'submit', by: applicant, at: at, comment: '' }]),
   }), '上長に承認申請しました');
+}
+
+// 工程表そのものが不要な物件（工事なしで販売する等）を、理由つきで上長に申請する
+function submitNotRequired() {
+  const s = getSchedule();
+  const reason = (document.getElementById('not-required-reason').value || '').trim();
+  const applicant = (document.getElementById('submit-applicant').value || '').trim();
+  if (s.tasks.length) { showToast('工程が登録されているため、工程不要の申請はできません'); return; }
+  if (!reason) { showToast('工程が不要な理由を入力してください'); return; }
+  if (!applicant) { showToast('申請者（担当）名を入力してください'); return; }
+  const at = nowString();
+  saveSchedule(Object.assign({}, s, {
+    status: 'pending',
+    notRequired: true,
+    notRequiredReason: reason,
+    submittedBy: applicant,
+    submittedAt: at,
+    approvedBy: '',
+    approvedAt: '',
+    log: s.log.concat([{ action: 'submitNotRequired', by: applicant, at: at, comment: reason }]),
+  }), '工程不要として承認申請しました');
+}
+
+// 工程不要（承認済み）を取り消し、工程未入力の状態に戻す（アラート対象に戻るだけなので承認は不要）
+function cancelNotRequired() {
+  if (!confirm('工程不要を取り消すと「工程未入力」に戻り、アラートの対象になります。よろしいですか？')) return;
+  const s = getSchedule();
+  saveSchedule(Object.assign({}, s, {
+    status: 'draft',
+    notRequired: false,
+    notRequiredReason: '',
+    approvedBy: '',
+    approvedAt: '',
+    log: s.log.concat([{ action: 'cancelNotRequired', by: '', at: nowString(), comment: '' }]),
+  }), '工程不要を取り消しました');
 }
 
 // ===== 承認・差戻し（上長） =====

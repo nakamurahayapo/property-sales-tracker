@@ -177,6 +177,7 @@ function isPriceReviewDue(settlementDate) {
 // 物件ドキュメントの schedule フィールド：
 //   { tasks: [{ id, type, name, vendor, startDate, endDate, done, note }],
 //     status: 'draft'（未申請）/'pending'（承認待ち）/'approved'（承認済み）/'rejected'（差戻し）,
+//     notRequired（工程不要として申請・承認されたか）, notRequiredReason,
 //     submittedBy, submittedAt, approvedBy, approvedAt, rejectedBy, rejectedAt, rejectComment,
 //     log: [{ action, by, at, comment }] }
 
@@ -188,15 +189,21 @@ const SCHEDULE_STATUS_LABELS = {
 };
 
 // 物件の工程表のアラート状態を返す。
-// level: 'missing'（工程未入力）/'rejected'/'pending'/'draft'/'approved'
+// level: 'missing'（工程未入力）/'rejected'/'pending'/'draft'/'approved'/'notRequired'（工程不要・承認済み）
 // delayedCount: 終了予定日を過ぎても完了になっていない工程の数
 function getScheduleAlert(property) {
   const schedule = (property && property.schedule) || {};
   const tasks = Array.isArray(schedule.tasks) ? schedule.tasks : [];
   const today = getTodayString();
   const delayedCount = tasks.filter(function (t) { return !t.done && t.endDate && t.endDate < today; }).length;
-  if (!tasks.length) return { level: 'missing', label: '工程未入力', delayedCount: 0 };
   const status = SCHEDULE_STATUS_LABELS[schedule.status] ? schedule.status : 'draft';
+  // 工事なしで販売する物件など、工程表そのものが不要な物件（上長承認済みならアラート対象外）
+  if (schedule.notRequired && !tasks.length) {
+    if (status === 'approved') return { level: 'notRequired', label: '工程不要', delayedCount: 0 };
+    if (status === 'pending') return { level: 'pending', label: '工程不要 承認待ち', delayedCount: 0 };
+    if (status === 'rejected') return { level: 'rejected', label: '工程不要 差戻し', delayedCount: 0 };
+  }
+  if (!tasks.length) return { level: 'missing', label: '工程未入力', delayedCount: 0 };
   const label = status === 'draft' ? '工程 未申請' : `工程 ${SCHEDULE_STATUS_LABELS[status]}`;
   return { level: status, label, delayedCount };
 }

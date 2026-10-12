@@ -376,12 +376,12 @@ function scheduleUrl(propertyId) {
   return `schedule.html?id=${encodeURIComponent(propertyId)}`;
 }
 
-// 状態欄に出す工程表のタグ（承認済みかつ遅延なしなら何も出さない）
+// 状態欄に出す工程表のタグ（承認済み・工程不要で遅延なしなら何も出さない）
 function renderScheduleTags(r) {
   const alert = r.scheduleAlert;
   if (!alert) return '';
   let html = '';
-  if (alert.level !== 'approved') {
+  if (alert.level !== 'approved' && alert.level !== 'notRequired') {
     html += `<a href="${scheduleUrl(r.propertyId)}" class="tag tag-schedule tag-schedule-${alert.level}">${alert.label}</a>`;
   }
   if (alert.delayedCount) {
