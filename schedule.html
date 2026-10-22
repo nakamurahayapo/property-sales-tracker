@@ -38,9 +38,16 @@
             <label class="form-label">承認者（上長）</label>
             <select id="approval-approver"></select>
           </div>
-          <div class="form-group">
+          <div class="form-group" id="approval-password-group">
             <label class="form-label">承認パスワード</label>
             <input type="password" id="approval-password" autocomplete="off" required>
+            <label class="form-checkbox" style="margin-top:8px;font-weight:400">
+              <input type="checkbox" id="approval-remember"> この端末でパスワードを記憶する（上長の端末のみ）
+            </label>
+          </div>
+          <div class="form-group" id="approval-remembered-group" hidden>
+            <div class="form-hint">この端末は承認パスワードを記憶済みのため、入力は不要です。
+              <a href="#" id="approval-forget">記憶を解除</a></div>
           </div>
           <div class="form-group">
             <label class="form-label" id="approval-comment-label">コメント（任意）</label>

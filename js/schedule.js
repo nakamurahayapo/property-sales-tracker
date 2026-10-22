@@ -625,6 +625,40 @@ function bindApprovalModal() {
   document.getElementById('approval-form').addEventListener('submit', onSubmitApproval);
   document.getElementById('approval-modal-close').addEventListener('click', closeApprovalModal);
   document.getElementById('approval-modal-cancel').addEventListener('click', closeApprovalModal);
+  document.getElementById('approval-forget').addEventListener('click', function (e) {
+    e.preventDefault();
+    setRememberedApprovalHash('');
+    updateApprovalPasswordFields();
+    showToast('この端末の承認パスワードの記憶を解除しました');
+  });
+}
+
+// 承認パスワードの端末記憶（上長の端末で入力を省くため）。ハッシュを保存するので、
+// SCHEDULE_APPROVAL_PASSWORD_HASH を変更すると記憶は自動的に無効になり、再入力が必要になる
+const APPROVAL_REMEMBER_KEY = 'scheduleApprovalPasswordHash';
+
+function getRememberedApprovalHash() {
+  try { return localStorage.getItem(APPROVAL_REMEMBER_KEY) || ''; } catch (err) { return ''; }
+}
+
+function setRememberedApprovalHash(hash) {
+  try {
+    if (hash) localStorage.setItem(APPROVAL_REMEMBER_KEY, hash);
+    else localStorage.removeItem(APPROVAL_REMEMBER_KEY);
+  } catch (err) {
+    console.error('承認パスワードの記憶エラー:', err);
+  }
+}
+
+function isApprovalPasswordRemembered() {
+  return getRememberedApprovalHash() === SCHEDULE_APPROVAL_PASSWORD_HASH;
+}
+
+function updateApprovalPasswordFields() {
+  const remembered = isApprovalPasswordRemembered();
+  document.getElementById('approval-password-group').hidden = remembered;
+  document.getElementById('approval-remembered-group').hidden = !remembered;
+  document.getElementById('approval-password').required = !remembered;
 }
 
 function openApprovalModal(action) {
@@ -638,8 +672,9 @@ function openApprovalModal(action) {
   document.getElementById('approval-approver').innerHTML = SCHEDULE_APPROVERS.map(function (name) {
     return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
   }).join('');
+  updateApprovalPasswordFields();
   document.getElementById('approval-modal-overlay').hidden = false;
-  document.getElementById('approval-password').focus();
+  if (!isApprovalPasswordRemembered()) document.getElementById('approval-password').focus();
 }
 
 function closeApprovalModal() {
@@ -657,16 +692,19 @@ async function onSubmitApproval(e) {
   if (s.status !== 'pending') { showToast('承認待ちの工程表ではありません'); closeApprovalModal(); return; }
   if (!approver) { showToast('承認者を選択してください'); return; }
   if (approvalAction === 'reject' && !comment) { showToast('差戻し理由を入力してください'); return; }
-  if (approver === s.submittedBy) { showToast('申請者本人は承認・差戻しできません'); return; }
-  let hash;
-  try {
-    hash = await sha256Hex(password);
-  } catch (err) {
-    console.error('パスワード照合エラー:', err);
-    showToast('この環境ではパスワードを照合できません（https または localhost で開いてください）');
-    return;
+  // 承認者（SCHEDULE_APPROVERS）本人が担当する物件は、自分で申請して自分で承認できる
+  if (!isApprovalPasswordRemembered()) {
+    let hash;
+    try {
+      hash = await sha256Hex(password);
+    } catch (err) {
+      console.error('パスワード照合エラー:', err);
+      showToast('この環境ではパスワードを照合できません（https または localhost で開いてください）');
+      return;
+    }
+    if (hash !== SCHEDULE_APPROVAL_PASSWORD_HASH) { showToast('承認パスワードが違います'); return; }
+    if (document.getElementById('approval-remember').checked) setRememberedApprovalHash(hash);
   }
-  if (hash !== SCHEDULE_APPROVAL_PASSWORD_HASH) { showToast('承認パスワードが違います'); return; }
 
   const at = nowString();
   const next = Object.assign({}, s);
