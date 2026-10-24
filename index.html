@@ -71,6 +71,7 @@
         </select>
         <input type="text" id="search-name" placeholder="物件名で検索">
       </div>
+      <button class="btn btn-secondary" id="share-pdf-btn" title="販売中の区画を、粗利・担当などの社内情報を除いて一覧にします">📄 他社紹介用PDF</button>
       <button class="btn btn-accent" id="add-property-btn">＋ 新規登録</button>
     </div>
 
@@ -115,6 +116,9 @@
     </div>
 
   </div>
+
+  <!-- 他社紹介用の物件一覧（印刷時のみ表示。ブラウザの印刷で「PDFに保存」する） -->
+  <div class="share-sheet" id="share-sheet"></div>
 
   <!-- 登録・編集モーダル -->
   <div class="modal-overlay" id="property-modal-overlay" hidden>

@@ -482,3 +482,55 @@ a.tag { text-decoration: none; }
 .schedule-alert-warning .schedule-alert-title { color: var(--accent-dark); }
 .schedule-alert-links { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
 .schedule-alert-links a { color: var(--primary); font-weight: 700; }
+
+/* ===== 他社紹介用PDF（印刷時のみ表示） ===== */
+.share-sheet { display: none; }
+
+@media print {
+  @page { size: A4 portrait; margin: 14mm 12mm; }
+  body.printing-share { background: #fff; }
+  body.printing-share > *:not(#share-sheet) { display: none !important; }
+  body.printing-share #share-sheet { display: block; }
+
+  .share-sheet {
+    color: #22303A;
+    font-size: 11pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .share-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 2.5pt solid var(--primary);
+    padding-bottom: 6pt;
+    margin-bottom: 10pt;
+  }
+  .share-title { font-size: 18pt; font-weight: 700; color: var(--primary); }
+  .share-meta { font-size: 10pt; color: var(--text-muted); }
+  .share-table { width: 100%; border-collapse: collapse; }
+  .share-table th {
+    background: var(--primary);
+    color: #fff;
+    font-weight: 700;
+    padding: 5pt 6pt;
+    border: 0.75pt solid var(--primary);
+    text-align: left;
+  }
+  .share-table thead { display: table-header-group; }
+  .share-table td {
+    padding: 5pt 6pt;
+    border: 0.75pt solid var(--border);
+    vertical-align: top;
+  }
+  .share-table tr { break-inside: avoid; }
+  .share-no { text-align: center; width: 2.5em; }
+  .share-name { font-weight: 700; }
+  .share-price { text-align: right; white-space: nowrap; font-weight: 700; }
+  .share-footer {
+    margin-top: 10pt;
+    font-size: 9pt;
+    color: var(--text-muted);
+  }
+  .share-contact { margin-top: 6pt; font-size: 10pt; color: #22303A; }
+}

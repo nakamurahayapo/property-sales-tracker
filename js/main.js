@@ -122,6 +122,74 @@ function bindToolbar() {
   document.getElementById('add-property-btn').addEventListener('click', function () {
     openPropertyModal(null);
   });
+  document.getElementById('share-pdf-btn').addEventListener('click', printShareSheet);
+}
+
+// ===== 他社紹介用PDF =====
+// 現在のフィルタ・検索で絞り込んだ区画のうち販売中のものだけを、社外に出してよい項目
+// （物件名・区画・所在地・販売価格）に限って一覧にし、ブラウザの印刷ダイアログから「PDFに保存」する。
+// 粗利・担当・仕入決済予定日・売り返し・工程などの社内情報は載せない。
+
+function printShareSheet() {
+  const rows = getFilteredRows(flattenLots())
+    .filter(function (r) { return r.status !== 'sold'; })
+    .sort(function (a, b) {
+      return (a.propertyName || '').localeCompare(b.propertyName || '', 'ja')
+        || (a.lotName || '').localeCompare(b.lotName || '', 'ja', { numeric: true });
+    });
+  if (!rows.length) {
+    showToast('PDFに載せる販売中の区画がありません（フィルタを確認してください）');
+    return;
+  }
+
+  // 同じ物件の区画は物件名・所在地のセルをまとめる（rowspan）
+  let body = '';
+  let no = 0;
+  let i = 0;
+  while (i < rows.length) {
+    const pid = rows[i].propertyId;
+    const group = [];
+    while (i < rows.length && rows[i].propertyId === pid) { group.push(rows[i]); i++; }
+    no++;
+    group.forEach(function (r, j) {
+      const head = j === 0
+        ? `<td rowspan="${group.length}" class="share-no">${no}</td>
+           <td rowspan="${group.length}" class="share-name">${escapeHtml(r.propertyName)}</td>
+           <td rowspan="${group.length}">${escapeHtml(r.propertyAddress || '－')}</td>`
+        : '';
+      body += `<tr>${head}
+        <td>${escapeHtml(r.lotName || '－')}</td>
+        <td class="share-price">${formatMan(r.currentPrice)}</td>
+      </tr>`;
+    });
+  }
+
+  const contact = SHARE_SHEET_CONTACT
+    ? `<div class="share-contact">${escapeHtml(SHARE_SHEET_CONTACT).replace(/\n/g, '<br>')}</div>`
+    : '';
+  document.getElementById('share-sheet').innerHTML = `
+    <div class="share-header">
+      <div class="share-title">販売物件一覧</div>
+      <div class="share-meta">${escapeHtml(SHARE_SHEET_COMPANY_NAME)}　作成日 ${formatDateJP(getTodayString())}</div>
+    </div>
+    <table class="share-table">
+      <thead>
+        <tr><th>No.</th><th>物件名</th><th>所在地</th><th>区画</th><th>販売価格</th></tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+    <div class="share-footer">
+      <div>全${no}物件・${rows.length}区画／価格は作成日時点のものです。最新の販売状況はお問い合わせください。</div>
+      ${contact}
+    </div>`;
+
+  // 印刷中だけ一覧以外を隠す（印刷ダイアログを閉じたら元に戻す）
+  document.body.classList.add('printing-share');
+  window.addEventListener('afterprint', function onAfterPrint() {
+    document.body.classList.remove('printing-share');
+    window.removeEventListener('afterprint', onAfterPrint);
+  });
+  window.print();
 }
 
 function bindSortableHeaders() {

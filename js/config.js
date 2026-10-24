@@ -41,6 +41,11 @@ const SCHEDULE_APPROVERS = ['西谷'];
 // ※ ログイン認証の代わりの簡易な鍵です（担当者本人による誤承認を防ぐ目的）
 const SCHEDULE_APPROVAL_PASSWORD_HASH = '9d970a1ce7cc06cd49ffc3aeba81b0411de1cc7b687cf2f6ab2381021dc4e51b';
 
+// ===== 他社紹介用PDF（物件一覧） =====
+// 一覧の見出し・フッターに出す自社名と連絡先。連絡先は空文字なら表示しない（改行は \n）
+const SHARE_SHEET_COMPANY_NAME = 'いえプロ不動産';
+const SHARE_SHEET_CONTACT = '';
+
 // ===== ブランドカラー（いえプロ不動産） =====
 // css/style.css 側の CSS変数と対応。JS側では主にグラフ描画で使用する
 const BRAND_COLORS = {
